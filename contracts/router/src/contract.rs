@@ -1,8 +1,11 @@
-use cosmwasm_std::{entry_point, from_binary, to_binary, Addr, Api, Binary, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo, QueryRequest, Response, StdError, StdResult, Uint128, WasmMsg, WasmQuery, Decimal};
+use cosmwasm_std::{
+    entry_point, from_binary, to_binary, Addr, Api, Binary, Coin, CosmosMsg, Decimal, Deps,
+    DepsMut, Env, MessageInfo, QueryRequest, Response, StdError, StdResult, Uint128, WasmMsg,
+    WasmQuery,
+};
 
 use crate::error::ContractError;
 use crate::operations::execute_swap_operation;
-use crate::querier::compute_tax;
 use crate::state::{Config, CONFIG};
 
 use astroport::asset::{addr_validate_to_lower, Asset, AssetInfo, PairInfo};
@@ -104,7 +107,7 @@ pub fn execute(
             operations,
             minimum_receive,
             to,
-            max_spread
+            max_spread,
         ),
         ExecuteMsg::ExecuteSwapOperation {
             operation,
@@ -150,7 +153,7 @@ pub fn receive_cw20(
             operations,
             minimum_receive,
             to,
-            max_spread
+            max_spread,
         } => {
             let to_addr = if let Some(to_addr) = to {
                 Some(addr_validate_to_lower(deps.api, to_addr.as_str())?)
@@ -166,7 +169,7 @@ pub fn receive_cw20(
                 operations,
                 minimum_receive,
                 to_addr,
-                max_spread
+                max_spread,
             )
         }
     }
@@ -198,7 +201,7 @@ pub fn execute_swap_operations(
     operations: Vec<SwapOperation>,
     minimum_receive: Option<Uint128>,
     to: Option<Addr>,
-    max_spread: Option<Decimal>
+    max_spread: Option<Decimal>,
 ) -> Result<Response<TerraMsgWrapper>, ContractError> {
     let operations_len = operations.len();
     if operations_len == 0 {
@@ -394,11 +397,14 @@ fn simulate_swap_operations(
                 // Deduct tax before query simulation
                 // because last swap is swap_send
                 if operation_index == operations_len {
-                    offer_amount = offer_amount.checked_sub(compute_tax(
-                        deps,
-                        offer_amount,
-                        offer_denom.clone(),
-                    )?)?;
+                    let asset = Asset {
+                        info: AssetInfo::NativeToken {
+                            denom: offer_denom.clone(),
+                        },
+                        amount: offer_amount,
+                    };
+
+                    offer_amount = offer_amount.checked_sub(asset.compute_tax(&deps.querier)?)?;
                 }
 
                 let res: SwapResponse = terra_querier.query_swap(
@@ -423,8 +429,12 @@ fn simulate_swap_operations(
 
                 // Deduct tax before querying simulation
                 if let AssetInfo::NativeToken { denom } = offer_asset_info.clone() {
-                    offer_amount =
-                        offer_amount.checked_sub(compute_tax(deps, offer_amount, denom)?)?;
+                    let asset = Asset {
+                        info: AssetInfo::NativeToken { denom },
+                        amount: offer_amount,
+                    };
+
+                    offer_amount = offer_amount.checked_sub(asset.compute_tax(&deps.querier)?)?;
                 }
 
                 let mut res: SimulationResponse =
@@ -432,7 +442,7 @@ fn simulate_swap_operations(
                         contract_addr: pair_info.contract_addr.to_string(),
                         msg: to_binary(&PairQueryMsg::Simulation {
                             offer_asset: Asset {
-                                info: offer_asset_info,
+                                info: offer_asset_info.clone(),
                                 amount: offer_amount,
                             },
                         })?,
@@ -440,11 +450,14 @@ fn simulate_swap_operations(
 
                 // Deduct tax after querying simulation
                 if let AssetInfo::NativeToken { denom } = ask_asset_info.clone() {
-                    res.return_amount = res.return_amount.checked_sub(compute_tax(
-                        deps,
-                        res.return_amount,
-                        denom,
-                    )?)?;
+                    let asset = Asset {
+                        info: AssetInfo::NativeToken { denom },
+                        amount: res.return_amount,
+                    };
+
+                    res.return_amount = res
+                        .return_amount
+                        .checked_sub(asset.compute_tax(&deps.querier)?)?;
                 }
 
                 offer_amount = res.return_amount;
