@@ -35,4 +35,11 @@ serde = { version = "1.0.103", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.20" }
 
 [dev-dependencies]
+cosmwasm-vm = { version = "0.16.2", default-features = false, features = ["iterator"] }
 cosmwasm-schema = "0.16.2"
+terra-cosmwasm = { version = "2.2.0" }
+astroport-token = {path = "../token"}
+terra-multi-test = {git = "https://github.com/astroport-fi/terra-plus.git", tag = "v0.9.1-terra"}
+astroport-factory = {path = "../factory"}
+astroport-pair-stable-bluna = {path = "../pair_stable_bluna"}
+astroport-tests = {git = "https://github.com/astroport-fi/astroport-governance.git", branch = "feat/escrow-fee-distributor-contract", package = "astroport-tests"}
