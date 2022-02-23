@@ -3,6 +3,7 @@ use astroport::factory::{
     ExecuteMsg as FactoryExecuteMsg, InstantiateMsg as FactoryInstantiateMsg, PairConfig, PairType,
     QueryMsg as FactoryQueryMsg,
 };
+use astroport::pair_stable_bluna::{ExecuteMsg, StablePoolParams};
 use astroport::router::SwapOperation;
 use astroport::token::InstantiateMsg as TokenInstantiateMsg;
 use astroport::{factory, pair, router, token};
@@ -12,6 +13,7 @@ use cosmwasm_std::{
     attr, to_binary, Addr, Coin, Decimal, QueryRequest, StdResult, Uint128, WasmQuery,
 };
 use cw20::{BalanceResponse, Cw20Coin, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
+use serde::de::IntoDeserializer;
 use terra_multi_test::{AppBuilder, BankKeeper, ContractWrapper, Executor, TerraApp, TerraMock};
 
 const OWNER: &str = "owner";
@@ -45,6 +47,7 @@ fn test_swap() {
     let mut router_app = mock_app();
     let router_app_ref = &mut router_app;
     let owner = Addr::unchecked(OWNER);
+    let user1 = Addr::unchecked("user1");
 
     let factory_contract = Box::new(
         ContractWrapper::new_with_empty(
@@ -75,6 +78,13 @@ fn test_swap() {
 
     let astro_token_code_id = router_app.store_code(astro_token_contract);
 
+    let whitelist_contract = Box::new(ContractWrapper::new_with_empty(
+        astroport_whitelist::contract::execute,
+        astroport_whitelist::contract::instantiate,
+        astroport_whitelist::contract::query,
+    ));
+    let whitelist_code_id = router_app.store_code(whitelist_contract);
+
     let init_msg = factory::InstantiateMsg {
         fee_address: None,
         pair_configs: vec![PairConfig {
@@ -88,7 +98,7 @@ fn test_swap() {
         token_code_id: astro_token_code_id,
         generator_address: Some(String::from("generator")),
         owner: String::from("owner0000"),
-        whitelist_code_id: 23u64,
+        whitelist_code_id,
     };
 
     let factory_instance = router_app
@@ -107,10 +117,10 @@ fn test_swap() {
     let init_msg = token::InstantiateMsg {
         name: token_name.to_string(),
         symbol: token_name.to_string(),
-        decimals: 5,
+        decimals: 6,
         initial_balances: vec![Cw20Coin {
             address: OWNER.to_string(),
-            amount: Uint128::new(1000000000),
+            amount: Uint128::new(1_000_000_000_000),
         }],
         mint: Some(MinterResponse {
             minter: String::from(OWNER),
@@ -132,7 +142,7 @@ fn test_swap() {
     let msg = pair::InstantiateMsg {
         asset_infos: [
             AssetInfo::Token {
-                contract_addr: bluna_token_instance,
+                contract_addr: bluna_token_instance.clone(),
             },
             AssetInfo::NativeToken {
                 denom: "uusd".to_string(),
@@ -140,18 +150,49 @@ fn test_swap() {
         ],
         token_code_id: astro_token_code_id,
         factory_addr: factory_instance.to_string(),
-        init_params: None,
+        init_params: Some(
+            to_binary(&StablePoolParams {
+                amp: 100,
+                bluna_rewarder: Addr::unchecked("bluna_rewarder").to_string(),
+                generator: String::from("generator"),
+            })
+            .unwrap(),
+        ),
     };
 
     let pair_bluna_instance = router_app
         .instantiate_contract(
             pair_bluna_code_id,
             owner.clone(),
-            bluna_instance & msg,
+            &msg,
             &[],
             String::from("PAIR"),
             None,
         )
+        .unwrap();
+
+    let msg = factory::ExecuteMsg::CreatePair {
+        asset_infos: [
+            AssetInfo::Token {
+                contract_addr: bluna_token_instance.clone(),
+            },
+            AssetInfo::NativeToken {
+                denom: "uusd".to_string(),
+            },
+        ],
+        pair_type: PairType::Stable {},
+        init_params: Some(
+            to_binary(&StablePoolParams {
+                amp: 100,
+                bluna_rewarder: Addr::unchecked("bluna_rewarder").to_string(),
+                generator: String::from("generator"),
+            })
+            .unwrap(),
+        ),
+    };
+
+    router_app
+        .execute_contract(owner.clone(), factory_instance.clone(), &msg, &[])
         .unwrap();
 
     let router_contract = Box::new(ContractWrapper::new(
@@ -177,10 +218,84 @@ fn test_swap() {
         )
         .unwrap();
 
+    router_app
+        .init_bank_balance(
+            &owner,
+            vec![Coin {
+                denom: "uusd".to_string(),
+                amount: Uint128::new(40_000_000_000),
+            }],
+        )
+        .unwrap();
+
+    mint_tokens(&mut router_app, &bluna_token_instance, &user1, 100_000_000);
+
+    let msg_increase = Cw20ExecuteMsg::IncreaseAllowance {
+        spender: user1.to_string(),
+        expires: None,
+        amount: Uint128::new(100_000_000),
+    };
+    router_app
+        .execute_contract(
+            owner.clone(),
+            bluna_token_instance.clone(),
+            &msg_increase,
+            &[],
+        )
+        .unwrap();
+
+    let msg = ExecuteMsg::ProvideLiquidity {
+        assets: [
+            Asset {
+                info: AssetInfo::Token {
+                    contract_addr: bluna_token_instance.clone(),
+                },
+                amount: Uint128::new(10_000_000),
+            },
+            Asset {
+                info: AssetInfo::NativeToken {
+                    denom: "uusd".to_string(),
+                },
+                amount: Uint128::new(10_000_000),
+            },
+        ],
+        slippage_tolerance: None,
+        auto_stake: None,
+        receiver: None,
+    };
+
+    router_app
+        .execute_contract(
+            owner.clone(),
+            pair_bluna_instance.clone(),
+            &msg,
+            &[Coin {
+                denom: "uusd".to_string(),
+                amount: Uint128::new(10_000_000),
+            }],
+        )
+        .unwrap();
+
+    // router_app
+    //     .execute_contract(
+    //         owner.clone(),
+    //         bluna_token_instance.clone(),
+    //         &msg_increase,
+    //         &[],
+    //     )
+    //     .unwrap();
+    //
+    // mint_tokens(
+    //     &mut router_app,
+    //     &bluna_token_instance,
+    //     &router_instance,
+    //     10_000_000,
+    // );
+
     let msg = router::ExecuteMsg::ExecuteSwapOperation {
         operation: SwapOperation::AstroSwap {
             offer_asset_info: AssetInfo::Token {
-                contract_addr: pair_bluna_instance,
+                contract_addr: bluna_token_instance.clone(),
             },
             ask_asset_info: AssetInfo::NativeToken {
                 denom: "uusd".to_string(),
@@ -192,5 +307,15 @@ fn test_swap() {
 
     router_app
         .execute_contract(router_instance.clone(), router_instance.clone(), &msg, &[])
+        .unwrap();
+}
+
+fn mint_tokens(app: &mut TerraApp, token: &Addr, recipient: &Addr, amount: u128) {
+    let msg = Cw20ExecuteMsg::Mint {
+        recipient: recipient.to_string(),
+        amount: Uint128::from(amount),
+    };
+
+    app.execute_contract(Addr::unchecked(OWNER), token.to_owned(), &msg, &[])
         .unwrap();
 }

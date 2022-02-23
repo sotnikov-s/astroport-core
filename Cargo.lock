@@ -322,6 +322,7 @@ dependencies = [
  "astroport-pair-stable-bluna",
  "astroport-tests",
  "astroport-token 1.0.0",
+ "astroport-whitelist",
  "cosmwasm-schema",
  "cosmwasm-std",
  "cosmwasm-vm",

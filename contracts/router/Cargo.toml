@@ -43,3 +43,4 @@ terra-multi-test = {git = "https://github.com/astroport-fi/terra-plus.git", tag 
 astroport-factory = {path = "../factory"}
 astroport-pair-stable-bluna = {path = "../pair_stable_bluna"}
 astroport-tests = {git = "https://github.com/astroport-fi/astroport-governance.git", branch = "feat/escrow-fee-distributor-contract", package = "astroport-tests"}
+astroport-whitelist = {path = "../whitelist"}
