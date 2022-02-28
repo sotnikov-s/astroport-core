@@ -1,11 +1,13 @@
 import {Client, executeContract, newClient, queryContract, readArtifact} from "./helpers.js";
 import * as fs from "fs";
+import * as util from "util";
 
 async function pairs(cl: Client) {
     let terraSwapFactoryAddress = "terra1ulgw0td86nvs4wtpsc80thv6xelk76ut7a7apj";
 
+    let totalPairs = [];
     let response = await queryContract(cl.terra, terraSwapFactoryAddress, {"pairs": {"limit": 30}});
-    let totalPairs = response.pairs;
+    totalPairs.push(...response.pairs);
 
     do {
         response = await queryContract(cl.terra, terraSwapFactoryAddress, {
@@ -14,7 +16,7 @@ async function pairs(cl: Client) {
                 "start_after": totalPairs[totalPairs.length - 1].asset_infos
             }
         });
-        totalPairs.push(response.pairs);
+        totalPairs.push(...response.pairs);
     } while (response.pairs.length > 0);
 
     return totalPairs;
@@ -41,6 +43,8 @@ async function main() {
     let pairs_list = []
     let astroportFactoryAddress = "terra1fnywlw4edny3vw44x04xd67uzkdqluymgreu7g";
 
+    fs.writeFileSync('./terraswap_pairs.json', JSON.stringify(terraswap_pairs, null, 2) , 'utf-8');
+
     for(let i=0; i<terraswap_pairs.length; i++){
         try {
             await queryContract(clientLCD.terra, astroportFactoryAddress,
@@ -53,7 +57,7 @@ async function main() {
         }
     }
 
-    fs.writeFileSync('./terraswap_pairs.json', JSON.stringify(pairs_list, null, 2) , 'utf-8');
+    fs.writeFileSync('./non_exists_pairs.json', JSON.stringify(pairs_list, null, 2) , 'utf-8');
     console.log("size: ", pairs_list.length)
 }
 main().catch(console.log)
