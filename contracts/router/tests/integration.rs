@@ -224,17 +224,22 @@ fn test_swap() {
             &owner,
             vec![Coin {
                 denom: "uusd".to_string(),
-                amount: Uint128::new(40_000_000_000),
+                amount: Uint128::new(1000_000_000_000),
             }],
         )
         .unwrap();
 
-    mint_tokens(&mut router_app, &astro_token_instance, &user1, 100_000_000);
+    mint_tokens(
+        &mut router_app,
+        &astro_token_instance,
+        &user1,
+        100_000_000_000,
+    );
 
     let msg_increase = Cw20ExecuteMsg::IncreaseAllowance {
         spender: pair_bluna_instance.to_string(),
         expires: None,
-        amount: Uint128::new(10_000_000),
+        amount: Uint128::new(100_000_000_000),
     };
 
     router_app
@@ -252,13 +257,13 @@ fn test_swap() {
                 info: AssetInfo::Token {
                     contract_addr: astro_token_instance.clone(),
                 },
-                amount: Uint128::new(1_000_000),
+                amount: Uint128::new(100_000_000_000),
             },
             Asset {
                 info: AssetInfo::NativeToken {
                     denom: "uusd".to_string(),
                 },
-                amount: Uint128::new(1_000_000),
+                amount: Uint128::new(100_000_000_000),
             },
         ],
         slippage_tolerance: None,
@@ -266,55 +271,28 @@ fn test_swap() {
         receiver: None,
     };
 
-    router_app
-        .execute_contract(
-            owner.clone(),
-            pair_bluna_instance.clone(),
-            &msg,
-            &[Coin {
-                denom: "uusd".to_string(),
-                amount: Uint128::new(1_000_000),
-            }],
-        )
-        .unwrap();
-
-    // router_app
-    //     .execute_contract(
-    //         owner.clone(),
-    //         bluna_token_instance.clone(),
-    //         &msg_increase,
-    //         &[],
-    //     )
-    //     .unwrap();
-
-    mint_tokens(
-        &mut router_app,
-        &astro_token_instance,
-        &router_instance,
-        1_000_000,
+    let x = router_app.execute_contract(
+        owner.clone(),
+        pair_bluna_instance.clone(),
+        &msg,
+        &[Coin {
+            denom: "uusd".to_string(),
+            amount: Uint128::new(100_000_000_000),
+        }],
     );
-
-    router_app
-        .init_bank_balance(
-            &router_instance,
-            vec![Coin {
-                denom: "uusd".to_string(),
-                amount: Uint128::new(10_000_000),
-            }],
-        )
-        .unwrap();
+    let x = x.unwrap();
 
     let msg = router::ExecuteMsg::ExecuteSwapOperation {
         operation: SwapOperation::AstroSwap {
-            offer_asset_info: AssetInfo::Token {
-                contract_addr: astro_token_instance.clone(),
-            },
-            ask_asset_info: AssetInfo::NativeToken {
+            offer_asset_info: AssetInfo::NativeToken {
                 denom: "uusd".to_string(),
+            },
+            ask_asset_info: AssetInfo::Token {
+                contract_addr: astro_token_instance.clone(),
             },
         },
         to: None,
-        max_spread: None,
+        max_spread: Some(Decimal::percent(20)),
     };
 
     router_app
