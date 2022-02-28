@@ -113,7 +113,7 @@ fn test_swap() {
         )
         .unwrap();
 
-    let token_name = "bluna";
+    let token_name = "astro";
 
     let init_msg = token::InstantiateMsg {
         name: token_name.to_string(),
