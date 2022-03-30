@@ -3,13 +3,14 @@ use astroport::factory::{
     ExecuteMsg as FactoryExecuteMsg, InstantiateMsg as FactoryInstantiateMsg, PairConfig, PairType,
     QueryMsg as FactoryQueryMsg,
 };
-use astroport::pair::{
-    ConfigResponse, CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg, QueryMsg,
-    StablePoolConfig, StablePoolParams, StablePoolUpdateParams, TWAP_PRECISION,
+use astroport::pair::TWAP_PRECISION;
+use astroport::pair_metastable::{
+    ConfigResponse, CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg,
+    MetaStablePoolConfig, MetaStablePoolParams, MetaStablePoolUpdateParams, QueryMsg,
 };
 
 use astroport::token::InstantiateMsg as TokenInstantiateMsg;
-use astroport_pair_stable::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
+use astroport_pair_metastable::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
 use cosmwasm_std::testing::{mock_env, MockApi, MockStorage};
 use cosmwasm_std::{
     attr, from_binary, to_binary, Addr, Coin, Decimal, QueryRequest, Uint128, WasmQuery,
@@ -48,11 +49,11 @@ fn store_token_code(app: &mut TerraApp) -> u64 {
 fn store_pair_code(app: &mut TerraApp) -> u64 {
     let pair_contract = Box::new(
         ContractWrapper::new_with_empty(
-            astroport_pair_stable::contract::execute,
-            astroport_pair_stable::contract::instantiate,
-            astroport_pair_stable::contract::query,
+            astroport_pair_metastable::contract::execute,
+            astroport_pair_metastable::contract::instantiate,
+            astroport_pair_metastable::contract::query,
         )
-        .with_reply_empty(astroport_pair_stable::contract::reply),
+        .with_reply_empty(astroport_pair_metastable::contract::reply),
     );
 
     app.store_code(pair_contract)
@@ -87,6 +88,8 @@ fn instantiate_pair(mut router: &mut TerraApp, owner: &Addr) -> Addr {
         ],
         token_code_id: token_contract_code_id,
         factory_addr: String::from("factory"),
+        er_provider_addr: String::from("er_provider"),
+        er_cache_btl: 100u64,
         init_params: None,
     };
 
@@ -113,7 +116,9 @@ fn instantiate_pair(mut router: &mut TerraApp, owner: &Addr) -> Addr {
         ],
         token_code_id: token_contract_code_id,
         factory_addr: String::from("factory"),
-        init_params: Some(to_binary(&StablePoolParams { amp: 100 }).unwrap()),
+        er_provider_addr: String::from("er_provider"),
+        er_cache_btl: 100u64,
+        init_params: Some(to_binary(&MetaStablePoolParams { amp: 100 }).unwrap()),
     };
 
     let pair = router
@@ -367,7 +372,7 @@ fn test_compatibility_of_tokens_with_different_precision() {
             code_id: pair_code_id,
             maker_fee_bps: 0,
             total_fee_bps: 0,
-            pair_type: PairType::Stable {},
+            pair_type: PairType::MetaStable {},
             is_disabled: false,
             is_generator_disabled: false,
         }],
@@ -389,7 +394,7 @@ fn test_compatibility_of_tokens_with_different_precision() {
         .unwrap();
 
     let msg = FactoryExecuteMsg::CreatePair {
-        pair_type: PairType::Stable {},
+        pair_type: PairType::MetaStable {},
         asset_infos: [
             AssetInfo::Token {
                 contract_addr: token_x_instance.clone(),
@@ -398,7 +403,7 @@ fn test_compatibility_of_tokens_with_different_precision() {
                 contract_addr: token_y_instance.clone(),
             },
         ],
-        init_params: Some(to_binary(&StablePoolParams { amp: 100 }).unwrap()),
+        init_params: Some(to_binary(&MetaStablePoolParams { amp: 100 }).unwrap()),
     };
 
     app.execute_contract(owner.clone(), factory_instance.clone(), &msg, &[])
@@ -586,6 +591,8 @@ fn create_pair_with_same_assets() {
         ],
         token_code_id: token_contract_code_id,
         factory_addr: String::from("factory"),
+        er_provider_addr: String::from("er_provider"),
+        er_cache_btl: 100u64,
         init_params: None,
     };
 
@@ -644,7 +651,9 @@ fn update_pair_config() {
         ],
         token_code_id: token_contract_code_id,
         factory_addr: factory_instance.to_string(),
-        init_params: Some(to_binary(&StablePoolParams { amp: 100 }).unwrap()),
+        er_provider_addr: String::from("er_provider"),
+        er_cache_btl: 100u64,
+        init_params: Some(to_binary(&MetaStablePoolParams { amp: 100 }).unwrap()),
     };
 
     let pair = router
@@ -663,17 +672,21 @@ fn update_pair_config() {
         .query_wasm_smart(pair.clone(), &QueryMsg::Config {})
         .unwrap();
 
-    let params: StablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
+    let params: MetaStablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
 
     assert_eq!(params.amp, Decimal::from_ratio(100u32, 1u32));
 
     // Start changing amp with incorrect next amp
     let msg = ExecuteMsg::UpdateConfig {
-        params: to_binary(&StablePoolUpdateParams::StartChangingAmp {
-            next_amp: MAX_AMP + 1,
-            next_amp_time: router.block_info().time.seconds(),
-        })
-        .unwrap(),
+        params: Some(
+            to_binary(&MetaStablePoolUpdateParams::StartChangingAmp {
+                next_amp: MAX_AMP + 1,
+                next_amp_time: router.block_info().time.seconds(),
+            })
+            .unwrap(),
+        ),
+        er_cache_btl: None,
+        er_provider_addr: None,
     };
 
     let resp = router
@@ -690,11 +703,15 @@ fn update_pair_config() {
 
     // Start changing amp with big difference between the old and new amp value
     let msg = ExecuteMsg::UpdateConfig {
-        params: to_binary(&StablePoolUpdateParams::StartChangingAmp {
-            next_amp: 100 * MAX_AMP_CHANGE + 1,
-            next_amp_time: router.block_info().time.seconds(),
-        })
-        .unwrap(),
+        params: Some(
+            to_binary(&MetaStablePoolUpdateParams::StartChangingAmp {
+                next_amp: 100 * MAX_AMP_CHANGE + 1,
+                next_amp_time: router.block_info().time.seconds(),
+            })
+            .unwrap(),
+        ),
+        er_cache_btl: None,
+        er_provider_addr: None,
     };
 
     let resp = router
@@ -711,11 +728,15 @@ fn update_pair_config() {
 
     // Start changing amp before the MIN_AMP_CHANGING_TIME has elapsed
     let msg = ExecuteMsg::UpdateConfig {
-        params: to_binary(&StablePoolUpdateParams::StartChangingAmp {
-            next_amp: 250,
-            next_amp_time: router.block_info().time.seconds(),
-        })
-        .unwrap(),
+        params: Some(
+            to_binary(&MetaStablePoolUpdateParams::StartChangingAmp {
+                next_amp: 250,
+                next_amp_time: router.block_info().time.seconds(),
+            })
+            .unwrap(),
+        ),
+        er_cache_btl: None,
+        er_provider_addr: None,
     };
 
     let resp = router
@@ -736,11 +757,15 @@ fn update_pair_config() {
     });
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: to_binary(&StablePoolUpdateParams::StartChangingAmp {
-            next_amp: 250,
-            next_amp_time: router.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
-        })
-        .unwrap(),
+        params: Some(
+            to_binary(&MetaStablePoolUpdateParams::StartChangingAmp {
+                next_amp: 250,
+                next_amp_time: router.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
+            })
+            .unwrap(),
+        ),
+        er_cache_btl: None,
+        er_provider_addr: None,
     };
 
     router
@@ -756,7 +781,7 @@ fn update_pair_config() {
         .query_wasm_smart(pair.clone(), &QueryMsg::Config {})
         .unwrap();
 
-    let params: StablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
+    let params: MetaStablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
 
     assert_eq!(params.amp, Decimal::from_ratio(175u32, 1u32));
 
@@ -769,7 +794,7 @@ fn update_pair_config() {
         .query_wasm_smart(pair.clone(), &QueryMsg::Config {})
         .unwrap();
 
-    let params: StablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
+    let params: MetaStablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
 
     assert_eq!(params.amp, Decimal::from_ratio(250u32, 1u32));
 
@@ -779,11 +804,15 @@ fn update_pair_config() {
     });
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: to_binary(&StablePoolUpdateParams::StartChangingAmp {
-            next_amp: 50,
-            next_amp_time: router.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
-        })
-        .unwrap(),
+        params: Some(
+            to_binary(&MetaStablePoolUpdateParams::StartChangingAmp {
+                next_amp: 50,
+                next_amp_time: router.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
+            })
+            .unwrap(),
+        ),
+        er_cache_btl: None,
+        er_provider_addr: None,
     };
 
     router
@@ -799,13 +828,15 @@ fn update_pair_config() {
         .query_wasm_smart(pair.clone(), &QueryMsg::Config {})
         .unwrap();
 
-    let params: StablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
+    let params: MetaStablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
 
     assert_eq!(params.amp, Decimal::from_ratio(150u32, 1u32));
 
     // Stop changing amp
     let msg = ExecuteMsg::UpdateConfig {
-        params: to_binary(&StablePoolUpdateParams::StopChangingAmp {}).unwrap(),
+        params: Some(to_binary(&MetaStablePoolUpdateParams::StopChangingAmp {}).unwrap()),
+        er_cache_btl: None,
+        er_provider_addr: None,
     };
 
     router
@@ -821,7 +852,7 @@ fn update_pair_config() {
         .query_wasm_smart(pair.clone(), &QueryMsg::Config {})
         .unwrap();
 
-    let params: StablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
+    let params: MetaStablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
 
     assert_eq!(params.amp, Decimal::from_ratio(150u32, 1u32));
 }

@@ -1,9 +1,9 @@
 [package]
-name = "astroport-pair-stable"
+name = "astroport-pair-metastable"
 version = "1.0.0"
 authors = ["Astroport"]
 edition = "2021"
-description = "The Astroport stableswap pair contract implementation"
+description = "The Astroport metastableswap pair contract implementation"
 license = "MIT"
 
 exclude = [

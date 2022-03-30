@@ -10,9 +10,10 @@ use crate::response::MsgInstantiateContractResponse;
 use crate::state::Config;
 use astroport::asset::{Asset, AssetInfo, PairInfo};
 
-use astroport::pair::{
-    Cw20HookMsg, ExecuteMsg, InstantiateMsg, PoolResponse, SimulationResponse, StablePoolParams,
-    TWAP_PRECISION,
+use astroport::pair::TWAP_PRECISION;
+use astroport::pair_metastable::{
+    Cw20HookMsg, ExecuteMsg, InstantiateMsg, MetaStablePoolParams, PoolResponse,
+    SimulationResponse,
 };
 use astroport::token::InstantiateMsg as TokenInstantiateMsg;
 use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
@@ -56,6 +57,8 @@ fn proper_initialization() {
 
     let msg = InstantiateMsg {
         factory_addr: String::from("factory"),
+        er_provider_addr: String::from("er_provider"),
+        er_cache_btl: 100u64,
         asset_infos: [
             AssetInfo::NativeToken {
                 denom: "uusd".to_string(),
@@ -65,7 +68,7 @@ fn proper_initialization() {
             },
         ],
         token_code_id: 10u64,
-        init_params: Some(to_binary(&StablePoolParams { amp: 100 }).unwrap()),
+        init_params: Some(to_binary(&MetaStablePoolParams { amp: 100 }).unwrap()),
     };
 
     let sender = "addr0000";
@@ -148,7 +151,9 @@ fn provide_liquidity() {
         ],
         token_code_id: 10u64,
         factory_addr: String::from("factory"),
-        init_params: Some(to_binary(&StablePoolParams { amp: 100 }).unwrap()),
+        er_provider_addr: String::from("er_provider"),
+        er_cache_btl: 100u64,
+        init_params: Some(to_binary(&MetaStablePoolParams { amp: 100 }).unwrap()),
     };
 
     let env = mock_env();
@@ -512,7 +517,9 @@ fn withdraw_liquidity() {
         ],
         token_code_id: 10u64,
         factory_addr: String::from("factory"),
-        init_params: Some(to_binary(&StablePoolParams { amp: 100 }).unwrap()),
+        er_provider_addr: String::from("er_provider"),
+        er_cache_btl: 100u64,
+        init_params: Some(to_binary(&MetaStablePoolParams { amp: 100 }).unwrap()),
     };
 
     let env = mock_env();
@@ -638,7 +645,9 @@ fn try_native_to_token() {
         ],
         token_code_id: 10u64,
         factory_addr: String::from("factory"),
-        init_params: Some(to_binary(&StablePoolParams { amp: 100 }).unwrap()),
+        er_provider_addr: String::from("er_provider"),
+        er_cache_btl: 100u64,
+        init_params: Some(to_binary(&MetaStablePoolParams { amp: 100 }).unwrap()),
     };
 
     let env = mock_env_with_block_time(100);
@@ -792,7 +801,9 @@ fn try_token_to_native() {
         ],
         token_code_id: 10u64,
         factory_addr: String::from("factory"),
-        init_params: Some(to_binary(&StablePoolParams { amp: 100 }).unwrap()),
+        er_provider_addr: String::from("er_provider"),
+        er_cache_btl: 100u64,
+        init_params: Some(to_binary(&MetaStablePoolParams { amp: 100 }).unwrap()),
     };
 
     let env = mock_env_with_block_time(100);
@@ -1042,7 +1053,9 @@ fn test_query_pool() {
         ],
         token_code_id: 10u64,
         factory_addr: String::from("factory"),
-        init_params: Some(to_binary(&StablePoolParams { amp: 100 }).unwrap()),
+        er_provider_addr: String::from("er_provider"),
+        er_cache_btl: 100u64,
+        init_params: Some(to_binary(&MetaStablePoolParams { amp: 100 }).unwrap()),
     };
 
     let env = mock_env();
@@ -1107,7 +1120,9 @@ fn test_query_share() {
         ],
         token_code_id: 10u64,
         factory_addr: String::from("factory"),
-        init_params: Some(to_binary(&StablePoolParams { amp: 100 }).unwrap()),
+        er_provider_addr: String::from("er_provider"),
+        er_cache_btl: 100u64,
+        init_params: Some(to_binary(&MetaStablePoolParams { amp: 100 }).unwrap()),
     };
 
     let env = mock_env();
@@ -1214,12 +1229,13 @@ fn test_accumulate_prices() {
                     ],
                     contract_addr: Addr::unchecked("pair"),
                     liquidity_token: Addr::unchecked("lp_token"),
-                    pair_type: PairType::Stable {},
+                    pair_type: PairType::MetaStable {},
                 },
                 factory_addr: Addr::unchecked("factory"),
                 block_time_last: case.block_time_last,
                 price0_cumulative_last: Uint128::new(case.last0),
                 price1_cumulative_last: Uint128::new(case.last1),
+                er_provider_addr: Addr::unchecked("er_provider"),
                 init_amp: 100 * AMP_PRECISION,
                 init_amp_time: env.block.time.seconds(),
                 next_amp: 100 * AMP_PRECISION,

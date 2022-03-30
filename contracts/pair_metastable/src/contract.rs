@@ -1,15 +1,15 @@
 use crate::error::ContractError;
 use crate::math::{
-    calc_ask_amount, calc_offer_amount, compute_d, AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE,
-    MIN_AMP_CHANGING_TIME, N_COINS,
+    calc_ask_amount, calc_offer_amount, compute_d, downscale, upscale, AMP_PRECISION, MAX_AMP,
+    MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME, N_COINS,
 };
-use crate::state::{Config, CONFIG};
+use crate::state::{Config, TmpPairExchangeRate, CONFIG, ER_CACHE};
 
 use cosmwasm_bignumber::Decimal256;
 use cosmwasm_std::{
     attr, entry_point, from_binary, to_binary, Addr, Binary, Coin, CosmosMsg, Decimal, Deps,
-    DepsMut, Env, MessageInfo, Reply, ReplyOn, Response, StdError, StdResult, SubMsg, Uint128,
-    WasmMsg,
+    DepsMut, Env, MessageInfo, QuerierWrapper, Reply, ReplyOn, Response, StdError, StdResult,
+    Storage, SubMsg, Uint128, WasmMsg,
 };
 
 use crate::response::MsgInstantiateContractResponse;
@@ -17,18 +17,16 @@ use astroport::asset::{addr_validate_to_lower, format_lp_token_name, Asset, Asse
 use astroport::factory::PairType;
 
 use astroport::generator::Cw20HookMsg as GeneratorHookMsg;
-use astroport::pair::{
-    ConfigResponse, InstantiateMsg, StablePoolParams, StablePoolUpdateParams, DEFAULT_SLIPPAGE,
-    MAX_ALLOWED_SLIPPAGE, TWAP_PRECISION,
-};
-
-use astroport::pair::{
-    CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, MigrateMsg, PoolResponse, QueryMsg,
-    ReverseSimulationResponse, SimulationResponse, StablePoolConfig,
+use astroport::pair::{DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE, TWAP_PRECISION};
+use astroport::pair_metastable::{
+    ConfigResponse, CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg,
+    MetaStablePoolConfig, MetaStablePoolParams, MetaStablePoolUpdateParams, MigrateMsg,
+    PoolResponse, QueryMsg, ReverseSimulationResponse, SimulationResponse,
 };
 use astroport::querier::{
     query_factory_config, query_fee_info, query_supply, query_token_precision,
 };
+use astroport::rate_provider::query_exchange_rate;
 use astroport::{token::InstantiateMsg as TokenInstantiateMsg, U256};
 use cw2::set_contract_version;
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg, MinterResponse};
@@ -38,7 +36,7 @@ use std::str::FromStr;
 use std::vec;
 
 /// Contract name that is used for migration.
-const CONTRACT_NAME: &str = "astroport-pair-stable";
+const CONTRACT_NAME: &str = "astroport-pair-metastable";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// A `reply` call code ID of sub-message.
@@ -74,7 +72,11 @@ pub fn instantiate(
         return Err(ContractError::InitParamsNotFound {});
     }
 
-    let params: StablePoolParams = from_binary(&msg.init_params.unwrap())?;
+    if msg.er_cache_btl == 0 {
+        return Err(ContractError::IncorrectErCacheBTL {});
+    }
+
+    let params: MetaStablePoolParams = from_binary(&msg.init_params.unwrap())?;
 
     if params.amp == 0 || params.amp > MAX_AMP {
         return Err(ContractError::IncorrectAmp {});
@@ -87,9 +89,10 @@ pub fn instantiate(
             contract_addr: env.contract.address.clone(),
             liquidity_token: Addr::unchecked(""),
             asset_infos: msg.asset_infos.clone(),
-            pair_type: PairType::Stable {},
+            pair_type: PairType::MetaStable {},
         },
         factory_addr: addr_validate_to_lower(deps.api, msg.factory_addr.as_str())?,
+        er_provider_addr: addr_validate_to_lower(deps.api, msg.er_provider_addr.as_str())?,
         block_time_last: 0,
         price0_cumulative_last: Uint128::zero(),
         price1_cumulative_last: Uint128::zero(),
@@ -98,8 +101,14 @@ pub fn instantiate(
         next_amp: params.amp * AMP_PRECISION,
         next_amp_time: env.block.time.seconds(),
     };
-
     CONFIG.save(deps.storage, &config)?;
+
+    let er_cache = TmpPairExchangeRate {
+        exchange_rate: Decimal::zero(),
+        height: 0u64,
+        btl: msg.er_cache_btl,
+    };
+    ER_CACHE.save(deps.storage, &er_cache)?;
 
     let token_name = format_lp_token_name(msg.asset_infos, &deps.querier)?;
 
@@ -199,7 +208,11 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::UpdateConfig { params } => update_config(deps, env, info, params),
+        ExecuteMsg::UpdateConfig {
+            params,
+            er_provider_addr,
+            er_cache_btl,
+        } => update_config(deps, env, info, params, er_provider_addr, er_cache_btl),
         ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
         ExecuteMsg::ProvideLiquidity {
             assets,
@@ -737,6 +750,13 @@ pub fn swap(
     )?;
 
     let offer_amount = offer_asset.amount;
+    let er = get_and_cache_exchange_rate(
+        offer_asset.info.clone(),
+        ask_pool.info.clone(),
+        env.block.height,
+        deps.storage,
+        &deps.querier,
+    )?;
     let (return_amount, spread_amount, commission_amount) = compute_swap(
         offer_pool.amount,
         query_token_precision(&deps.querier, offer_pool.info)?,
@@ -744,6 +764,7 @@ pub fn swap(
         query_token_precision(&deps.querier, ask_pool.info.clone())?,
         offer_amount,
         fee_info.total_fee_rate,
+        er,
         compute_current_amp(&config, &env)?,
     )?;
 
@@ -1033,6 +1054,13 @@ pub fn query_simulation(deps: Deps, env: Env, offer_asset: Asset) -> StdResult<S
         config.pair_info.pair_type.clone(),
     )?;
 
+    let er = get_exchange_rate(
+        offer_asset.info,
+        ask_pool.clone().info,
+        env.block.height,
+        deps.storage,
+        &deps.querier,
+    )?;
     let (return_amount, spread_amount, commission_amount) = compute_swap(
         offer_pool.amount,
         query_token_precision(&deps.querier, offer_pool.info)?,
@@ -1040,6 +1068,7 @@ pub fn query_simulation(deps: Deps, env: Env, offer_asset: Asset) -> StdResult<S
         query_token_precision(&deps.querier, ask_pool.info)?,
         offer_asset.amount,
         fee_info.total_fee_rate,
+        er,
         compute_current_amp(&config, &env)?,
     )?;
 
@@ -1148,10 +1177,13 @@ pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePric
 /// * **deps** is an object of type [`Deps`].
 pub fn query_config(deps: Deps, env: Env) -> StdResult<ConfigResponse> {
     let config: Config = CONFIG.load(deps.storage)?;
+    let er_cache: TmpPairExchangeRate = ER_CACHE.load(deps.storage)?;
     Ok(ConfigResponse {
         block_time_last: config.block_time_last,
-        params: Some(to_binary(&StablePoolConfig {
+        params: Some(to_binary(&MetaStablePoolConfig {
             amp: Decimal::from_ratio(compute_current_amp(&config, &env)?, AMP_PRECISION),
+            er_provider_addr: config.er_provider_addr.to_string(),
+            er_cache_btl: er_cache.btl,
         })?),
     })
 }
@@ -1193,18 +1225,28 @@ fn compute_swap(
     ask_precision: u8,
     offer_amount: Uint128,
     commission_rate: Decimal,
+    exchange_rate: Decimal,
     amp: u64,
 ) -> StdResult<(Uint128, Uint128, Uint128)> {
     // offer => ask
 
     let greater_precision = offer_precision.max(ask_precision);
-    let offer_pool = adjust_precision(offer_pool, offer_precision, greater_precision)?;
     let ask_pool = adjust_precision(ask_pool, ask_precision, greater_precision)?;
-    let offer_amount = adjust_precision(offer_amount, offer_precision, greater_precision)?;
+    let offer_pool = upscale(
+        adjust_precision(offer_pool, offer_precision, greater_precision)?,
+        exchange_rate,
+    )?;
+    let offer_amount = upscale(
+        adjust_precision(offer_amount, offer_precision, greater_precision)?,
+        exchange_rate,
+    )?;
 
-    let return_amount = Uint128::new(
-        calc_ask_amount(offer_pool.u128(), ask_pool.u128(), offer_amount.u128(), amp).unwrap(),
-    );
+    let return_amount = downscale(
+        Uint128::new(
+            calc_ask_amount(offer_pool.u128(), ask_pool.u128(), offer_amount.u128(), amp).unwrap(),
+        ),
+        exchange_rate,
+    )?;
 
     // We assume the assets should stay in a 1:1 ratio, so the true exchange rate is 1. So any exchange rate <1 could be considered the spread
     let spread_amount = offer_amount.saturating_sub(return_amount);
@@ -1277,6 +1319,46 @@ fn compute_offer_amount(
     Ok((offer_amount, spread_amount, commission_amount))
 }
 
+fn get_and_cache_exchange_rate(
+    offer_asset: AssetInfo,
+    ask_asset: AssetInfo,
+    height: u64,
+    storage: &mut dyn Storage,
+    querier: &QuerierWrapper,
+) -> StdResult<Decimal> {
+    if let Ok(er) = ER_CACHE.load(storage) {
+        if !er.is_expired(height) {
+            return Ok(er.exchange_rate);
+        }
+    }
+
+    let er_provider_address = CONFIG.load(storage)?.er_provider_addr;
+    let er = query_exchange_rate(querier, offer_asset, ask_asset, er_provider_address)?;
+    ER_CACHE.update(storage, |mut prev_state| -> StdResult<_> {
+        prev_state.update_rate(er.exchange_rate, height);
+        Ok(prev_state)
+    })?;
+    Ok(er.exchange_rate)
+}
+
+fn get_exchange_rate(
+    offer_asset: AssetInfo,
+    ask_asset: AssetInfo,
+    height: u64,
+    storage: &dyn Storage,
+    querier: &QuerierWrapper,
+) -> StdResult<Decimal> {
+    if let Ok(er) = ER_CACHE.load(storage) {
+        if !er.is_expired(height) {
+            return Ok(er.exchange_rate);
+        }
+    }
+
+    let er_provider_address = CONFIG.load(storage)?.er_provider_addr;
+    let er = query_exchange_rate(querier, offer_asset, ask_asset, er_provider_address)?;
+    Ok(er.exchange_rate)
+}
+
 /// ## Description
 /// Return a value using a newly specified precision.
 /// ## Params
@@ -1309,7 +1391,7 @@ fn adjust_precision(
 /// * **belief_price** is an object of type [`Option<Decimal>`]. This is the belief price used in the swap.
 ///
 /// * **max_spread** is an object of type [`Option<Decimal>`]. This is the
-/// max spread allowed so that the swap can be executed successfuly.
+/// max spread allowed so that the swap can be executed successfully.
 ///
 /// * **offer_amount** is an object of type [`Uint128`]. This is the amount of assets to swap.
 ///
@@ -1364,7 +1446,7 @@ fn assert_slippage_tolerance(
     _deposits: &[Uint128; 2],
     _pools: &[Asset; 2],
 ) -> Result<(), ContractError> {
-    // There is no slippage in the stable pool
+    // There is no slippage in the metastable pool
     Ok(())
 }
 
@@ -1411,21 +1493,38 @@ pub fn update_config(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    params: Binary,
+    params: Option<Binary>,
+    er_provider_addr: Option<String>,
+    er_cache_btl: Option<u64>,
 ) -> Result<Response, ContractError> {
-    let config = CONFIG.load(deps.storage)?;
+    let mut config = CONFIG.load(deps.storage)?;
     let factory_config = query_factory_config(&deps.querier, config.factory_addr.clone())?;
 
     if info.sender != factory_config.owner {
         return Err(ContractError::Unauthorized {});
     }
 
-    match from_binary::<StablePoolUpdateParams>(&params)? {
-        StablePoolUpdateParams::StartChangingAmp {
-            next_amp,
-            next_amp_time,
-        } => start_changing_amp(config, deps, env, next_amp, next_amp_time)?,
-        StablePoolUpdateParams::StopChangingAmp {} => stop_changing_amp(config, deps, env)?,
+    if let Some(p) = params {
+        match from_binary::<MetaStablePoolUpdateParams>(&p)? {
+            MetaStablePoolUpdateParams::StartChangingAmp {
+                next_amp,
+                next_amp_time,
+            } => start_changing_amp(&mut config, deps.storage, env, next_amp, next_amp_time)?,
+            MetaStablePoolUpdateParams::StopChangingAmp {} => {
+                stop_changing_amp(&mut config, deps.storage, env)?
+            }
+        }
+    }
+
+    if let Some(a) = er_provider_addr {
+        config.er_provider_addr = addr_validate_to_lower(deps.api, a.as_str())?;
+    }
+
+    if let Some(t) = er_cache_btl {
+        ER_CACHE.update(deps.storage, |mut prev_state| -> StdResult<_> {
+            prev_state.update_btl(t);
+            Ok(prev_state)
+        })?;
     }
 
     Ok(Response::default())
@@ -1444,8 +1543,8 @@ pub fn update_config(
 ///
 /// * **next_amp_time** is an object of type [`u64`]. This is the end time when the pool amplification will be equal to `next_amp`.
 fn start_changing_amp(
-    mut config: Config,
-    deps: DepsMut,
+    config: &mut Config,
+    storage: &mut dyn Storage,
     env: Env,
     next_amp: u64,
     next_amp_time: u64,
@@ -1477,7 +1576,7 @@ fn start_changing_amp(
     config.init_amp_time = block_time;
     config.next_amp_time = next_amp_time;
 
-    CONFIG.save(deps.storage, &config)?;
+    CONFIG.save(storage, &config)?;
 
     Ok(())
 }
@@ -1490,7 +1589,7 @@ fn start_changing_amp(
 /// * **deps** is an object of type [`DepsMut`].
 ///
 /// * **env** is an object of type [`Env`].
-fn stop_changing_amp(mut config: Config, deps: DepsMut, env: Env) -> StdResult<()> {
+fn stop_changing_amp(config: &mut Config, storage: &mut dyn Storage, env: Env) -> StdResult<()> {
     let current_amp = compute_current_amp(&config, &env)?;
     let block_time = env.block.time.seconds();
 
@@ -1500,7 +1599,7 @@ fn stop_changing_amp(mut config: Config, deps: DepsMut, env: Env) -> StdResult<(
     config.next_amp_time = block_time;
 
     // now (block_time < next_amp_time) is always False, so we return the saved AMP
-    CONFIG.save(deps.storage, &config)?;
+    CONFIG.save(storage, &config)?;
 
     Ok(())
 }
