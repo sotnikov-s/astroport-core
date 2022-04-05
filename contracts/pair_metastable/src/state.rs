@@ -1,5 +1,6 @@
-use astroport::asset::PairInfo;
-use cosmwasm_std::{Addr, Decimal, Uint128};
+use astroport::asset::{AssetInfo, PairInfo};
+use cosmwasm_bignumber::Decimal256;
+use cosmwasm_std::{Addr, Decimal, StdError, StdResult, Uint128};
 use cw_storage_plus::Item;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -35,6 +36,8 @@ pub struct Config {
 /// This structure stores temporary exchange rate information for a pair.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct TmpPairExchangeRate {
+    /// Asset information for the assets in the pair
+    pub asset_infos: [AssetInfo; 2],
     /// The proportion in exchange of asset 0 to asset 1
     pub exchange_rate: Decimal,
     /// The blockchain height of the exchange rate update
@@ -44,11 +47,40 @@ pub struct TmpPairExchangeRate {
 }
 
 impl TmpPairExchangeRate {
+    pub fn new(asset_infos: [AssetInfo; 2], btl: u64) -> TmpPairExchangeRate {
+        TmpPairExchangeRate {
+            asset_infos,
+            btl,
+            exchange_rate: Decimal::zero(),
+            height: 0u64,
+        }
+    }
+
+    /// ## Description
+    /// Returns the exchange rate between assets
+    pub fn get_rate(&self, asset_infos: [AssetInfo; 2]) -> StdResult<Decimal> {
+        if asset_infos[0].equal(&self.asset_infos[0]) && asset_infos[1].equal(&self.asset_infos[1])
+        {
+            return Ok(self.exchange_rate);
+        } else if asset_infos[0].equal(&self.asset_infos[1])
+            && asset_infos[1].equal(&self.asset_infos[0])
+        {
+            return Ok((Decimal256::one() / Decimal256::from(self.exchange_rate)).into());
+        }
+        return Err(StdError::generic_err(
+            "Given assets don't belong to the pair",
+        ));
+    }
+
+    /// ## Description
+    /// Updates the proportion in exchange of asset 0 to asset 1
     pub fn update_rate(&mut self, exchange_rate: Decimal, height: u64) {
         self.exchange_rate = exchange_rate;
         self.height = height;
     }
 
+    /// ## Description
+    /// Updates the cached exchange rate time to live measured in blocks
     pub fn update_btl(&mut self, btl: u64) {
         self.btl = btl;
     }

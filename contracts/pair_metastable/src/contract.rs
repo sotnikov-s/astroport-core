@@ -103,11 +103,14 @@ pub fn instantiate(
     };
     CONFIG.save(deps.storage, &config)?;
 
-    let er_cache = TmpPairExchangeRate {
-        exchange_rate: Decimal::zero(),
-        height: 0u64,
-        btl: msg.er_cache_btl,
-    };
+    let mut er_cache = TmpPairExchangeRate::new(msg.asset_infos.clone(), msg.er_cache_btl);
+    let er = query_exchange_rate(
+        &deps.querier,
+        msg.asset_infos[0].clone(),
+        msg.asset_infos[1].clone(),
+        config.er_provider_addr,
+    )?;
+    er_cache.update_rate(er.exchange_rate, env.block.height);
     ER_CACHE.save(deps.storage, &er_cache)?;
 
     let token_name = format_lp_token_name(msg.asset_infos, &deps.querier)?;
@@ -1328,7 +1331,7 @@ fn get_and_cache_exchange_rate(
 ) -> StdResult<Decimal> {
     if let Ok(er) = ER_CACHE.load(storage) {
         if !er.is_expired(height) {
-            return Ok(er.exchange_rate);
+            return er.get_rate([offer_asset, ask_asset]);
         }
     }
 
