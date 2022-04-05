@@ -93,3 +93,55 @@ impl TmpPairExchangeRate {
 pub const CONFIG: Item<Config> = Item::new("config");
 
 pub const ER_CACHE: Item<TmpPairExchangeRate> = Item::new("er_cache");
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tmp_pair_exchange_rate() {
+        let asset_0 = AssetInfo::NativeToken {
+            denom: String::from("uusd"),
+        };
+        let asset_1 = AssetInfo::Token {
+            contract_addr: Addr::unchecked("asset0000"),
+        };
+
+        // check proper initialization
+        let mut er = TmpPairExchangeRate::new([asset_0.clone(), asset_1.clone()], 10);
+        assert_eq!(er.btl, 10);
+        assert_eq!(er.height, 0);
+        assert_eq!(er.exchange_rate, Decimal::zero());
+
+        // check cached value expiration
+        er.update_rate(Decimal::from_ratio(1u128, 5u128), 1);
+        assert_eq!(er.is_expired(1), false);
+        assert_eq!(er.is_expired(11), true);
+
+        // update btl and check expiration
+        er.update_btl(20);
+        assert_eq!(er.is_expired(1), false);
+        assert_eq!(er.is_expired(11), false);
+        assert_eq!(er.is_expired(21), true);
+
+        // check get exchange rate in both directions
+        assert_eq!(er.get_rate([asset_0.clone(), asset_1.clone()]), Ok(Decimal::from_ratio(1u128, 5u128)));
+        assert_eq!(er.get_rate([asset_1.clone(), asset_0.clone()]), Ok(Decimal::from_ratio(5u128, 1u128)));
+
+        // make sure an error response is returned in token mismatch cases
+        let asset_2 = AssetInfo::NativeToken {
+            denom: String::from("uluna"),
+        };
+        assert_eq!(er.get_rate([asset_0.clone(), asset_2.clone()]), Err(StdError::generic_err(
+            "Given assets don't belong to the pair",
+        )));
+        assert_eq!(er.get_rate([asset_1.clone(), asset_2.clone()]), Err(StdError::generic_err(
+            "Given assets don't belong to the pair",
+        )));
+
+        // check update rate
+        er.update_rate(Decimal::from_ratio(2u128, 5u128), 1);
+        assert_eq!(er.get_rate([asset_0.clone(), asset_1.clone()]), Ok(Decimal::from_ratio(2u128, 5u128)));
+        assert_eq!(er.get_rate([asset_1.clone(), asset_0.clone()]), Ok(Decimal::from_ratio(5u128, 2u128)));
+    }
+}
