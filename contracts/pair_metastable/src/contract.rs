@@ -775,7 +775,7 @@ pub fn swap(
     assert_max_spread(
         belief_price,
         max_spread,
-        offer_amount,
+        upscale(offer_amount, er)?,
         return_amount + commission_amount,
         spread_amount,
     )?;
@@ -1244,12 +1244,9 @@ fn compute_swap(
         exchange_rate,
     )?;
 
-    let return_amount = downscale(
-        Uint128::new(
-            calc_ask_amount(offer_pool.u128(), ask_pool.u128(), offer_amount.u128(), amp).unwrap(),
-        ),
-        exchange_rate,
-    )?;
+    let return_amount = Uint128::new(
+        calc_ask_amount(offer_pool.u128(), ask_pool.u128(), offer_amount.u128(), amp).unwrap(),
+    );
 
     // We assume the assets should stay in a 1:1 ratio, so the true exchange rate is 1. So any exchange rate <1 could be considered the spread
     let spread_amount = offer_amount.saturating_sub(return_amount);
