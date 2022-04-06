@@ -47,7 +47,7 @@ pub struct TmpPairExchangeRate {
 }
 
 impl TmpPairExchangeRate {
-    pub fn new(asset_infos: [AssetInfo; 2], btl: u64) -> TmpPairExchangeRate {
+    pub fn new(asset_infos: [AssetInfo; 2], btl: u64) -> Self {
         TmpPairExchangeRate {
             asset_infos,
             btl,
@@ -125,23 +125,41 @@ mod tests {
         assert_eq!(er.is_expired(21), true);
 
         // check get exchange rate in both directions
-        assert_eq!(er.get_rate([asset_0.clone(), asset_1.clone()]), Ok(Decimal::from_ratio(1u128, 5u128)));
-        assert_eq!(er.get_rate([asset_1.clone(), asset_0.clone()]), Ok(Decimal::from_ratio(5u128, 1u128)));
+        assert_eq!(
+            er.get_rate([asset_0.clone(), asset_1.clone()]),
+            Ok(Decimal::from_ratio(1u128, 5u128))
+        );
+        assert_eq!(
+            er.get_rate([asset_1.clone(), asset_0.clone()]),
+            Ok(Decimal::from_ratio(5u128, 1u128))
+        );
 
         // make sure an error response is returned in token mismatch cases
         let asset_2 = AssetInfo::NativeToken {
             denom: String::from("uluna"),
         };
-        assert_eq!(er.get_rate([asset_0.clone(), asset_2.clone()]), Err(StdError::generic_err(
-            "Given assets don't belong to the pair",
-        )));
-        assert_eq!(er.get_rate([asset_1.clone(), asset_2.clone()]), Err(StdError::generic_err(
-            "Given assets don't belong to the pair",
-        )));
+        assert_eq!(
+            er.get_rate([asset_0.clone(), asset_2.clone()]),
+            Err(StdError::generic_err(
+                "Given assets don't belong to the pair",
+            ))
+        );
+        assert_eq!(
+            er.get_rate([asset_1.clone(), asset_2.clone()]),
+            Err(StdError::generic_err(
+                "Given assets don't belong to the pair",
+            ))
+        );
 
         // check update rate
         er.update_rate(Decimal::from_ratio(2u128, 5u128), 1);
-        assert_eq!(er.get_rate([asset_0.clone(), asset_1.clone()]), Ok(Decimal::from_ratio(2u128, 5u128)));
-        assert_eq!(er.get_rate([asset_1.clone(), asset_0.clone()]), Ok(Decimal::from_ratio(5u128, 2u128)));
+        assert_eq!(
+            er.get_rate([asset_0.clone(), asset_1.clone()]),
+            Ok(Decimal::from_ratio(2u128, 5u128))
+        );
+        assert_eq!(
+            er.get_rate([asset_1.clone(), asset_0.clone()]),
+            Ok(Decimal::from_ratio(5u128, 2u128))
+        );
     }
 }
