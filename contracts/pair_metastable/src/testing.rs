@@ -778,10 +778,10 @@ fn try_native_to_token() {
 
 #[test]
 fn try_token_to_native() {
-    let total_share = Uint128::new(30000000000u128);
-    let asset_pool_amount = Uint128::new(20000000000u128);
-    let collateral_pool_amount = Uint128::new(30000000000u128);
-    let offer_amount = Uint128::new(1500000000u128);
+    let total_share = Uint128::new(50_000_000_000u128);
+    let asset_pool_amount = Uint128::new(20_000_000_000u128);
+    let collateral_pool_amount = Uint128::new(100_000_000_000u128);
+    let offer_amount = Uint128::new(2_000_000_000u128);
 
     let mut deps = mock_dependencies(&[Coin {
         denom: "uusd".to_string(),
@@ -804,6 +804,19 @@ fn try_token_to_native() {
             )],
         ),
     ]);
+
+    let exchange_rate = Decimal::from_ratio(5u128, 1u128);
+    deps.querier.with_exchange_rates(&[(
+        [
+            AssetInfo::Token {
+                contract_addr: Addr::unchecked("asset0000"),
+            },
+            AssetInfo::NativeToken {
+                denom: "uusd".to_string(),
+            },
+        ],
+        exchange_rate,
+    )]);
 
     let msg = InstantiateMsg {
         asset_infos: [
@@ -852,7 +865,7 @@ fn try_token_to_native() {
         amount: offer_amount,
         msg: to_binary(&Cw20HookMsg::Swap {
             belief_price: None,
-            max_spread: None,
+            max_spread: Some(Decimal::from_ratio(1u128, 1000u128)),
             to: None,
         })
         .unwrap(),
@@ -865,14 +878,17 @@ fn try_token_to_native() {
 
     let model: StableSwapModel = StableSwapModel::new(
         100,
-        vec![collateral_pool_amount.into(), asset_pool_amount.into()],
+        vec![
+            collateral_pool_amount.into(),
+            (asset_pool_amount * exchange_rate).into(),
+        ],
         2,
     );
 
-    let sim_result = model.sim_exchange(1, 0, offer_amount.into());
+    let sim_result = model.sim_exchange(0, 1, (offer_amount * exchange_rate).into());
 
     let expected_ret_amount = Uint128::new(sim_result);
-    let expected_spread_amount = offer_amount.saturating_sub(expected_ret_amount);
+    let expected_spread_amount = (offer_amount * exchange_rate).saturating_sub(expected_ret_amount);
     let expected_commission_amount = expected_ret_amount.multiply_ratio(3u128, 1000u128); // 0.3%
     let expected_maker_fee_amount = expected_commission_amount.multiply_ratio(166u128, 1000u128);
 
