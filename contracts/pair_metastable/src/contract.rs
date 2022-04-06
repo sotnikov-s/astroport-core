@@ -110,7 +110,11 @@ pub fn instantiate(
         msg.asset_infos[1].clone(),
         config.er_provider_addr,
     )?;
-    er_cache.update_rate(er.exchange_rate, env.block.height);
+    er_cache.update_rate(
+        [&msg.asset_infos[0], &msg.asset_infos[1]],
+        er.exchange_rate,
+        env.block.height,
+    )?;
     ER_CACHE.save(deps.storage, &er_cache)?;
 
     let token_name = format_lp_token_name(msg.asset_infos, &deps.querier)?;
@@ -1328,14 +1332,19 @@ fn get_and_cache_exchange_rate(
 ) -> StdResult<Decimal> {
     if let Ok(er) = ER_CACHE.load(storage) {
         if !er.is_expired(height) {
-            return er.get_rate([offer_asset, ask_asset]);
+            return er.get_rate([&offer_asset, &ask_asset]);
         }
     }
 
     let er_provider_address = CONFIG.load(storage)?.er_provider_addr;
-    let er = query_exchange_rate(querier, offer_asset, ask_asset, er_provider_address)?;
+    let er = query_exchange_rate(
+        querier,
+        offer_asset.clone(),
+        ask_asset.clone(),
+        er_provider_address,
+    )?;
     ER_CACHE.update(storage, |mut prev_state| -> StdResult<_> {
-        prev_state.update_rate(er.exchange_rate, height);
+        prev_state.update_rate([&offer_asset, &ask_asset], er.exchange_rate, height)?;
         Ok(prev_state)
     })?;
     Ok(er.exchange_rate)
@@ -1350,7 +1359,7 @@ fn get_exchange_rate(
 ) -> StdResult<Decimal> {
     if let Ok(er) = ER_CACHE.load(storage) {
         if !er.is_expired(height) {
-            return Ok(er.exchange_rate);
+            return er.get_rate([&offer_asset, &ask_asset]);
         }
     }
 

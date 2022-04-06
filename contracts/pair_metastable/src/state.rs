@@ -58,7 +58,7 @@ impl TmpPairExchangeRate {
 
     /// ## Description
     /// Returns the exchange rate between assets
-    pub fn get_rate(&self, asset_infos: [AssetInfo; 2]) -> StdResult<Decimal> {
+    pub fn get_rate(&self, asset_infos: [&AssetInfo; 2]) -> StdResult<Decimal> {
         if asset_infos[0].equal(&self.asset_infos[0]) && asset_infos[1].equal(&self.asset_infos[1])
         {
             return Ok(self.exchange_rate);
@@ -74,9 +74,27 @@ impl TmpPairExchangeRate {
 
     /// ## Description
     /// Updates the proportion in exchange of asset 0 to asset 1
-    pub fn update_rate(&mut self, exchange_rate: Decimal, height: u64) {
-        self.exchange_rate = exchange_rate;
-        self.height = height;
+    pub fn update_rate(
+        &mut self,
+        asset_infos: [&AssetInfo; 2],
+        exchange_rate: Decimal,
+        height: u64,
+    ) -> StdResult<()> {
+        if asset_infos[0].equal(&self.asset_infos[0]) && asset_infos[1].equal(&self.asset_infos[1])
+        {
+            self.exchange_rate = exchange_rate;
+            self.height = height;
+            return Ok(());
+        } else if asset_infos[0].equal(&self.asset_infos[1])
+            && asset_infos[1].equal(&self.asset_infos[0])
+        {
+            self.exchange_rate = (Decimal256::one() / Decimal256::from(self.exchange_rate)).into();
+            self.height = height;
+            return Ok(());
+        }
+        return Err(StdError::generic_err(
+            "Given assets don't belong to the pair",
+        ));
     }
 
     /// ## Description
@@ -114,7 +132,10 @@ mod tests {
         assert_eq!(er.exchange_rate, Decimal::zero());
 
         // check cached value expiration
-        er.update_rate(Decimal::from_ratio(1u128, 5u128), 1);
+        assert_eq!(
+            er.update_rate([&asset_0, &asset_1], Decimal::from_ratio(1u128, 5u128), 1),
+            Ok(())
+        );
         assert_eq!(er.is_expired(1), false);
         assert_eq!(er.is_expired(11), true);
 
@@ -126,11 +147,11 @@ mod tests {
 
         // check get exchange rate in both directions
         assert_eq!(
-            er.get_rate([asset_0.clone(), asset_1.clone()]),
+            er.get_rate([&asset_0, &asset_1]),
             Ok(Decimal::from_ratio(1u128, 5u128))
         );
         assert_eq!(
-            er.get_rate([asset_1.clone(), asset_0.clone()]),
+            er.get_rate([&asset_1, &asset_0]),
             Ok(Decimal::from_ratio(5u128, 1u128))
         );
 
@@ -139,26 +160,41 @@ mod tests {
             denom: String::from("uluna"),
         };
         assert_eq!(
-            er.get_rate([asset_0.clone(), asset_2.clone()]),
+            er.get_rate([&asset_0, &asset_2]),
             Err(StdError::generic_err(
                 "Given assets don't belong to the pair",
             ))
         );
         assert_eq!(
-            er.get_rate([asset_1.clone(), asset_2.clone()]),
+            er.get_rate([&asset_1, &asset_2]),
+            Err(StdError::generic_err(
+                "Given assets don't belong to the pair",
+            ))
+        );
+        assert_eq!(
+            er.get_rate([&asset_0, &asset_0]),
+            Err(StdError::generic_err(
+                "Given assets don't belong to the pair",
+            ))
+        );
+        assert_eq!(
+            er.update_rate([&asset_1, &asset_2], Decimal::from_ratio(2u128, 1u128), 1),
             Err(StdError::generic_err(
                 "Given assets don't belong to the pair",
             ))
         );
 
         // check update rate
-        er.update_rate(Decimal::from_ratio(2u128, 5u128), 1);
         assert_eq!(
-            er.get_rate([asset_0.clone(), asset_1.clone()]),
+            er.update_rate([&asset_0, &asset_1], Decimal::from_ratio(2u128, 5u128), 1),
+            Ok(())
+        );
+        assert_eq!(
+            er.get_rate([&asset_0, &asset_1]),
             Ok(Decimal::from_ratio(2u128, 5u128))
         );
         assert_eq!(
-            er.get_rate([asset_1.clone(), asset_0.clone()]),
+            er.get_rate([&asset_1, &asset_0]),
             Ok(Decimal::from_ratio(5u128, 2u128))
         );
     }
