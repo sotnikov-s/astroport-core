@@ -1,12 +1,15 @@
+use cosmwasm_bignumber::Decimal256;
 use cosmwasm_std::testing::{MockApi, MockQuerier, MockStorage, MOCK_CONTRACT_ADDR};
 use cosmwasm_std::{
     from_binary, from_slice, to_binary, Addr, Coin, Decimal, OwnedDeps, Querier, QuerierResult,
-    QueryRequest, SystemError, SystemResult, Uint128, WasmQuery,
+    QueryRequest, StdError, StdResult, SystemError, SystemResult, Uint128, WasmQuery,
 };
 use std::collections::HashMap;
 
+use astroport::asset::AssetInfo;
 use astroport::factory::FeeInfoResponse;
 use astroport::factory::QueryMsg::FeeInfo;
+use astroport::rate_provider::{GetExchangeRateResponse, QueryMsg::GetExchangeRate};
 use cw20::{BalanceResponse, Cw20QueryMsg, TokenInfoResponse};
 use terra_cosmwasm::{TaxCapResponse, TaxRateResponse, TerraQuery, TerraQueryWrapper, TerraRoute};
 
@@ -29,6 +32,7 @@ pub struct WasmMockQuerier {
     base: MockQuerier<TerraQueryWrapper>,
     token_querier: TokenQuerier,
     tax_querier: TaxQuerier,
+    rate_querier: ExchangeRateQuerier,
 }
 
 #[derive(Clone, Default)]
@@ -82,6 +86,54 @@ pub(crate) fn caps_to_map(caps: &[(&String, &Uint128)]) -> HashMap<String, Uint1
         owner_map.insert(denom.to_string(), **cap);
     }
     owner_map
+}
+
+#[derive(Clone, Default)]
+pub struct ExchangeRateQuerier {
+    rates: HashMap<String, Decimal>,
+}
+
+impl ExchangeRateQuerier {
+    pub fn new(rates: &[([AssetInfo; 2], Decimal)]) -> Self {
+        ExchangeRateQuerier {
+            rates: rates_to_map(rates),
+        }
+    }
+
+    pub fn get(self, assets: [AssetInfo; 2]) -> StdResult<Decimal> {
+        let key = assets_to_rates_map_key(&assets);
+        match self.rates.get(&format!("{}-{}", key.0, key.1)) {
+            Some(v) => return Ok(*v),
+            None => {
+                return Err(StdError::generic_err(
+                    "no exchange rate found for the given pair",
+                ))
+            }
+        };
+    }
+}
+
+pub(crate) fn rates_to_map(rates: &[([AssetInfo; 2], Decimal)]) -> HashMap<String, Decimal> {
+    let mut rates_map: HashMap<String, Decimal> = HashMap::new();
+    for (assets, rate) in rates.iter() {
+        let (asset_0, asset_1) = assets_to_rates_map_key(assets);
+        rates_map.insert(format!("{}-{}", asset_0, asset_1), *rate);
+        let inv_rate: Decimal = (Decimal256::one() / Decimal256::from(*rate)).into();
+        rates_map.insert(format!("{}-{}", asset_1, asset_0), inv_rate);
+    }
+    rates_map
+}
+
+pub(crate) fn assets_to_rates_map_key(assets: &[AssetInfo; 2]) -> (String, String) {
+    let asset_0: String = match &assets[0] {
+        AssetInfo::NativeToken { denom } => denom.to_string(),
+        AssetInfo::Token { contract_addr } => contract_addr.clone().into_string(),
+    };
+    let asset_1: String = match &assets[1] {
+        AssetInfo::NativeToken { denom } => denom.to_string(),
+        AssetInfo::Token { contract_addr } => contract_addr.clone().into_string(),
+    };
+    (asset_0, asset_1)
 }
 
 impl Querier for WasmMockQuerier {
@@ -139,6 +191,30 @@ impl WasmMockQuerier {
                             })
                             .into(),
                         ),
+                        _ => panic!("DO NOT ENTER HERE"),
+                    }
+                } else if contract_addr == "er_provider" {
+                    match from_binary(&msg).unwrap() {
+                        GetExchangeRate {
+                            offer_asset,
+                            ask_asset,
+                        } => {
+                            match self
+                                .rate_querier
+                                .clone()
+                                .get([offer_asset.clone(), ask_asset.clone()])
+                            {
+                                Ok(v) => SystemResult::Ok(
+                                    to_binary(&GetExchangeRateResponse {
+                                        offer_asset,
+                                        ask_asset,
+                                        exchange_rate: v,
+                                    })
+                                    .into(),
+                                ),
+                                Err(_) => panic!("DO NOT ENTER HERE"),
+                            }
+                        }
                         _ => panic!("DO NOT ENTER HERE"),
                     }
                 } else {
@@ -203,6 +279,7 @@ impl WasmMockQuerier {
             base,
             token_querier: TokenQuerier::default(),
             tax_querier: TaxQuerier::default(),
+            rate_querier: ExchangeRateQuerier::default(),
         }
     }
 
@@ -220,5 +297,9 @@ impl WasmMockQuerier {
         for (addr, balance) in balances {
             self.base.update_balance(addr.to_string(), balance.to_vec());
         }
+    }
+
+    pub fn with_exchange_rates(&mut self, rates: &[([AssetInfo; 2], Decimal)]) {
+        self.rate_querier = ExchangeRateQuerier::new(rates);
     }
 }
