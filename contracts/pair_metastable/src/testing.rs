@@ -12,8 +12,7 @@ use astroport::asset::{Asset, AssetInfo, PairInfo};
 
 use astroport::pair::TWAP_PRECISION;
 use astroport::pair_metastable::{
-    Cw20HookMsg, ExecuteMsg, InstantiateMsg, MetaStablePoolParams, PoolResponse,
-    SimulationResponse,
+    Cw20HookMsg, ExecuteMsg, InstantiateMsg, MetaStablePoolParams, PoolResponse, SimulationResponse,
 };
 use astroport::token::InstantiateMsg as TokenInstantiateMsg;
 use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
@@ -608,10 +607,10 @@ fn withdraw_liquidity() {
 
 #[test]
 fn try_native_to_token() {
-    let total_share = Uint128::new(30000000000u128);
-    let asset_pool_amount = Uint128::new(20000000000u128);
-    let collateral_pool_amount = Uint128::new(30000000000u128);
-    let offer_amount = Uint128::new(1500000000u128);
+    let total_share = Uint128::new(50_000_000_000u128);
+    let asset_pool_amount = Uint128::new(20_000_000_000u128);
+    let collateral_pool_amount = Uint128::new(100_000_000_000u128);
+    let offer_amount = Uint128::new(10_000_000_000u128);
 
     let mut deps = mock_dependencies(&[Coin {
         denom: "uusd".to_string(),
@@ -633,6 +632,19 @@ fn try_native_to_token() {
             &[(&String::from(MOCK_CONTRACT_ADDR), &asset_pool_amount)],
         ),
     ]);
+
+    let exchange_rate = Decimal::from_ratio(1u128, 5u128);
+    deps.querier.with_exchange_rates(&[(
+        [
+            AssetInfo::NativeToken {
+                denom: "uusd".to_string(),
+            },
+            AssetInfo::Token {
+                contract_addr: Addr::unchecked("asset0000"),
+            },
+        ],
+        exchange_rate,
+    )]);
 
     let msg = InstantiateMsg {
         asset_infos: [
@@ -667,7 +679,7 @@ fn try_native_to_token() {
             amount: offer_amount,
         },
         belief_price: None,
-        max_spread: Some(Decimal::percent(50)),
+        max_spread: Some(Decimal::from_ratio(1u128, 1000u128)),
         to: None,
     };
     let env = mock_env_with_block_time(1000);
@@ -684,14 +696,17 @@ fn try_native_to_token() {
 
     let model: StableSwapModel = StableSwapModel::new(
         100,
-        vec![collateral_pool_amount.into(), asset_pool_amount.into()],
+        vec![
+            (collateral_pool_amount * exchange_rate).into(),
+            asset_pool_amount.into(),
+        ],
         2,
     );
 
-    let sim_result = model.sim_exchange(0, 1, offer_amount.into());
+    let sim_result = model.sim_exchange(0, 1, (offer_amount * exchange_rate).into());
 
     let expected_ret_amount = Uint128::new(sim_result);
-    let expected_spread_amount = offer_amount.saturating_sub(expected_ret_amount);
+    let expected_spread_amount = (offer_amount * exchange_rate).saturating_sub(expected_ret_amount);
     let expected_commission_amount = expected_ret_amount.multiply_ratio(3u128, 1000u128); // 0.3%
     let expected_maker_fee_amount = expected_commission_amount.multiply_ratio(166u128, 1000u128);
 
