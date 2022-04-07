@@ -215,7 +215,6 @@ impl WasmMockQuerier {
                                 Err(_) => panic!("DO NOT ENTER HERE"),
                             }
                         }
-                        _ => panic!("DO NOT ENTER HERE"),
                     }
                 } else {
                     match from_binary(&msg).unwrap() {
