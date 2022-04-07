@@ -1,7 +1,7 @@
 use crate::error::ContractError;
 use crate::math::{
-    calc_ask_amount, calc_offer_amount, compute_d, downscale, upscale, AMP_PRECISION, MAX_AMP,
-    MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME, N_COINS,
+    calc_ask_amount, calc_offer_amount, compute_d, upscale, AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE,
+    MIN_AMP_CHANGING_TIME, N_COINS,
 };
 use crate::state::{Config, TmpPairExchangeRate, CONFIG, ER_CACHE};
 

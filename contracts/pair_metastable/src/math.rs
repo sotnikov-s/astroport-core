@@ -1,4 +1,3 @@
-use cosmwasm_bignumber::Decimal256;
 use cosmwasm_std::{Decimal, OverflowError, Uint128};
 use std::convert::TryFrom;
 
@@ -117,13 +116,6 @@ pub fn compute_d(leverage: u64, amount_a: u128, amount_b: u128) -> Option<u128> 
 /// Safely applies the factor to amount, returning proportionally changed amount or an overflow error.
 pub fn upscale(amount: Uint128, factor: Decimal) -> Result<Uint128, OverflowError> {
     factor.checked_mul(amount)
-}
-
-/// ## Description
-/// Safely divides the factor by amount, returning proportionally changed amount or an overflow error.
-pub fn downscale(amount: Uint128, factor: Decimal) -> Result<Uint128, OverflowError> {
-    let inv_factor: Decimal = (Decimal256::one() / Decimal256::from(factor)).into();
-    inv_factor.checked_mul(amount)
 }
 
 /// ## Description
