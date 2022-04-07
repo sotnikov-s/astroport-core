@@ -54,6 +54,18 @@ fn proper_initialization() {
         &[(&String::from(MOCK_CONTRACT_ADDR), &Uint128::new(123u128))],
     )]);
 
+    deps.querier.with_exchange_rates(&[(
+        [
+            AssetInfo::Token {
+                contract_addr: Addr::unchecked("asset0000"),
+            },
+            AssetInfo::NativeToken {
+                denom: "uusd".to_string(),
+            },
+        ],
+        Decimal::from_ratio(5u128, 1u128),
+    )]);
+
     let msg = InstantiateMsg {
         factory_addr: String::from("factory"),
         er_provider_addr: String::from("er_provider"),
@@ -138,6 +150,18 @@ fn provide_liquidity() {
             &[(&String::from(MOCK_CONTRACT_ADDR), &Uint128::new(0))],
         ),
     ]);
+
+    deps.querier.with_exchange_rates(&[(
+        [
+            AssetInfo::Token {
+                contract_addr: Addr::unchecked("asset0000"),
+            },
+            AssetInfo::NativeToken {
+                denom: "uusd".to_string(),
+            },
+        ],
+        Decimal::from_ratio(5u128, 1u128),
+    )]);
 
     let msg = InstantiateMsg {
         asset_infos: [
@@ -504,6 +528,18 @@ fn withdraw_liquidity() {
             &[(&String::from(MOCK_CONTRACT_ADDR), &Uint128::new(100u128))],
         ),
     ]);
+
+    deps.querier.with_exchange_rates(&[(
+        [
+            AssetInfo::Token {
+                contract_addr: Addr::unchecked("asset0000"),
+            },
+            AssetInfo::NativeToken {
+                denom: "uusd".to_string(),
+            },
+        ],
+        Decimal::from_ratio(5u128, 1u128),
+    )]);
 
     let msg = InstantiateMsg {
         asset_infos: [
@@ -1073,6 +1109,18 @@ fn test_query_pool() {
         ),
     ]);
 
+    deps.querier.with_exchange_rates(&[(
+        [
+            AssetInfo::Token {
+                contract_addr: Addr::unchecked("asset0000"),
+            },
+            AssetInfo::NativeToken {
+                denom: "uusd".to_string(),
+            },
+        ],
+        Decimal::from_ratio(5u128, 1u128),
+    )]);
+
     let msg = InstantiateMsg {
         asset_infos: [
             AssetInfo::NativeToken {
@@ -1139,6 +1187,18 @@ fn test_query_share() {
             &[(&String::from(MOCK_CONTRACT_ADDR), &total_share_amount)],
         ),
     ]);
+
+    deps.querier.with_exchange_rates(&[(
+        [
+            AssetInfo::Token {
+                contract_addr: Addr::unchecked("asset0000"),
+            },
+            AssetInfo::NativeToken {
+                denom: "uusd".to_string(),
+            },
+        ],
+        Decimal::from_ratio(5u128, 1u128),
+    )]);
 
     let msg = InstantiateMsg {
         asset_infos: [
