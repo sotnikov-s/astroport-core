@@ -1,6 +1,7 @@
 pub mod asset;
 pub mod common;
 pub mod factory;
+pub mod fixed_rate_provider;
 pub mod generator;
 pub mod generator_proxy;
 pub mod maker;

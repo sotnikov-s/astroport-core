@@ -104,6 +104,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "astroport-fixed-rate-provider"
+version = "1.0.0"
+dependencies = [
+ "astroport 1.2.0",
+ "cosmwasm-bignumber",
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cw-storage-plus 0.8.1",
+ "cw2",
+ "cw20",
+ "integer-sqrt",
+ "schemars",
+ "serde",
+ "terra-cosmwasm",
+ "thiserror",
+]
+
+[[package]]
 name = "astroport-generator"
 version = "1.2.0"
 dependencies = [
@@ -229,6 +247,7 @@ version = "1.0.0"
 dependencies = [
  "astroport 1.2.0",
  "astroport-factory",
+ "astroport-fixed-rate-provider",
  "astroport-token",
  "cosmwasm-bignumber",
  "cosmwasm-schema",
