@@ -3,12 +3,14 @@ use astroport::factory::{
     ExecuteMsg as FactoryExecuteMsg, InstantiateMsg as FactoryInstantiateMsg, PairConfig, PairType,
     QueryMsg as FactoryQueryMsg,
 };
+use astroport::pair::InstantiateMsg;
 use astroport::pair::TWAP_PRECISION;
 use astroport::pair_metastable::{
-    ConfigResponse, CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg,
-    MetaStablePoolConfig, MetaStablePoolParams, MetaStablePoolUpdateParams, QueryMsg,
+    ConfigResponse, CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, MetaStablePoolConfig,
+    MetaStablePoolParams, MetaStablePoolUpdateAmp, QueryMsg,
 };
 
+use astroport::fixed_rate_provider::InstantiateMsg as RateProviderInstantiateMsg;
 use astroport::token::InstantiateMsg as TokenInstantiateMsg;
 use astroport_pair_metastable::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
 use cosmwasm_std::testing::{mock_env, MockApi, MockStorage};
@@ -59,6 +61,19 @@ fn store_pair_code(app: &mut TerraApp) -> u64 {
     app.store_code(pair_contract)
 }
 
+fn store_rate_provider_code(app: &mut TerraApp) -> u64 {
+    let rate_provider_contract = Box::new(
+        ContractWrapper::new_with_empty(
+            astroport_fixed_rate_provider::contract::execute,
+            astroport_fixed_rate_provider::contract::instantiate,
+            astroport_fixed_rate_provider::contract::query,
+        )
+        .with_reply_empty(astroport_pair_metastable::contract::reply),
+    );
+
+    app.store_code(rate_provider_contract)
+}
+
 fn store_factory_code(app: &mut TerraApp) -> u64 {
     let factory_contract = Box::new(
         ContractWrapper::new_with_empty(
@@ -74,22 +89,21 @@ fn store_factory_code(app: &mut TerraApp) -> u64 {
 
 fn instantiate_pair(mut router: &mut TerraApp, owner: &Addr) -> Addr {
     let token_contract_code_id = store_token_code(&mut router);
-
     let pair_contract_code_id = store_pair_code(&mut router);
+    let rate_provider_contract_code_id = store_rate_provider_code(&mut router);
+    let asset_infos = [
+        AssetInfo::NativeToken {
+            denom: "uusd".to_string(),
+        },
+        AssetInfo::NativeToken {
+            denom: "uluna".to_string(),
+        },
+    ];
 
     let msg = InstantiateMsg {
-        asset_infos: [
-            AssetInfo::NativeToken {
-                denom: "uusd".to_string(),
-            },
-            AssetInfo::NativeToken {
-                denom: "uluna".to_string(),
-            },
-        ],
+        asset_infos: asset_infos.clone(),
         token_code_id: token_contract_code_id,
         factory_addr: String::from("factory"),
-        er_provider_addr: String::from("er_provider"),
-        er_cache_btl: 100u64,
         init_params: None,
     };
 
@@ -99,26 +113,40 @@ fn instantiate_pair(mut router: &mut TerraApp, owner: &Addr) -> Addr {
             owner.clone(),
             &msg,
             &[],
-            String::from("PAIR"),
+            String::from("RATE_PROVIDER"),
             None,
         )
         .unwrap_err();
     assert_eq!("You need to provide init params", resp.to_string());
 
+    let msg = RateProviderInstantiateMsg {
+        asset_infos: asset_infos.clone(),
+        exchange_rate: Decimal::from_ratio(1u128, 5u128),
+    };
+
+    let rate_provider = router
+        .instantiate_contract(
+            rate_provider_contract_code_id,
+            owner.clone(),
+            &msg,
+            &[],
+            String::from("PAIR"),
+            None,
+        )
+        .unwrap();
+
     let msg = InstantiateMsg {
-        asset_infos: [
-            AssetInfo::NativeToken {
-                denom: "uusd".to_string(),
-            },
-            AssetInfo::NativeToken {
-                denom: "uluna".to_string(),
-            },
-        ],
+        asset_infos: asset_infos.clone(),
         token_code_id: token_contract_code_id,
         factory_addr: String::from("factory"),
-        er_provider_addr: String::from("er_provider"),
-        er_cache_btl: 100u64,
-        init_params: Some(to_binary(&MetaStablePoolParams { amp: 100 }).unwrap()),
+        init_params: Some(
+            to_binary(&MetaStablePoolParams {
+                amp: 100,
+                er_provider_addr: rate_provider.into_string(),
+                er_cache_btl: 100u64,
+            })
+            .unwrap(),
+        ),
     };
 
     let pair = router
@@ -136,8 +164,8 @@ fn instantiate_pair(mut router: &mut TerraApp, owner: &Addr) -> Addr {
         .wrap()
         .query_wasm_smart(pair.clone(), &QueryMsg::Pair {})
         .unwrap();
-    assert_eq!("contract #0", res.contract_addr);
-    assert_eq!("contract #1", res.liquidity_token);
+    assert_eq!("contract #1", res.contract_addr);
+    assert_eq!("contract #2", res.liquidity_token);
 
     pair
 }
@@ -155,7 +183,7 @@ fn test_provide_and_withdraw_liquidity() {
             vec![
                 Coin {
                     denom: "uusd".to_string(),
-                    amount: Uint128::new(233u128),
+                    amount: Uint128::new(1166u128),
                 },
                 Coin {
                     denom: "uluna".to_string(),
@@ -193,7 +221,7 @@ fn test_provide_and_withdraw_liquidity() {
             vec![
                 Coin {
                     denom: "uusd".to_string(),
-                    amount: Uint128::new(100u128),
+                    amount: Uint128::new(500u128),
                 },
                 Coin {
                     denom: "uluna".to_string(),
@@ -204,7 +232,7 @@ fn test_provide_and_withdraw_liquidity() {
         .unwrap();
 
     // Provide liquidity
-    let (msg, coins) = provide_liquidity_msg(Uint128::new(100), Uint128::new(100), None);
+    let (msg, coins) = provide_liquidity_msg(Uint128::new(500), Uint128::new(100), None);
     let res = router
         .execute_contract(alice_address.clone(), pair_instance.clone(), &msg, &coins)
         .unwrap();
@@ -216,22 +244,22 @@ fn test_provide_and_withdraw_liquidity() {
     assert_eq!(res.events[1].attributes[3], attr("receiver", "alice"),);
     assert_eq!(
         res.events[1].attributes[4],
-        attr("assets", "100uusd, 100uluna")
+        attr("assets", "500uusd, 100uluna")
     );
     assert_eq!(
         res.events[1].attributes[5],
-        attr("share", 100u128.to_string())
+        attr("share", 223u128.to_string())
     );
     assert_eq!(res.events[3].attributes[1], attr("action", "mint"));
     assert_eq!(res.events[3].attributes[2], attr("to", "alice"));
     assert_eq!(
         res.events[3].attributes[3],
-        attr("amount", 100u128.to_string())
+        attr("amount", 223u128.to_string())
     );
 
     // Provide liquidity for a custom receiver
     let (msg, coins) = provide_liquidity_msg(
-        Uint128::new(100),
+        Uint128::new(500),
         Uint128::new(100),
         Some("bob".to_string()),
     );
@@ -246,15 +274,18 @@ fn test_provide_and_withdraw_liquidity() {
     assert_eq!(res.events[1].attributes[3], attr("receiver", "bob"),);
     assert_eq!(
         res.events[1].attributes[4],
-        attr("assets", "100uusd, 100uluna")
+        attr("assets", "500uusd, 100uluna")
     );
     assert_eq!(
         res.events[1].attributes[5],
-        attr("share", 50u128.to_string())
+        attr("share", 111u128.to_string())
     );
     assert_eq!(res.events[3].attributes[1], attr("action", "mint"));
     assert_eq!(res.events[3].attributes[2], attr("to", "bob"));
-    assert_eq!(res.events[3].attributes[3], attr("amount", 50.to_string()));
+    assert_eq!(
+        res.events[3].attributes[3],
+        attr("amount", 111u128.to_string())
+    );
 }
 
 fn provide_liquidity_msg(
@@ -365,6 +396,15 @@ fn test_compatibility_of_tokens_with_different_precision() {
 
     let pair_code_id = store_pair_code(&mut app);
     let factory_code_id = store_factory_code(&mut app);
+    let rate_provider_contract_code_id = store_rate_provider_code(&mut app);
+    let asset_infos = [
+        AssetInfo::Token {
+            contract_addr: token_x_instance.clone(),
+        },
+        AssetInfo::Token {
+            contract_addr: token_y_instance.clone(),
+        },
+    ];
 
     let init_msg = FactoryInstantiateMsg {
         fee_address: None,
@@ -393,31 +433,40 @@ fn test_compatibility_of_tokens_with_different_precision() {
         )
         .unwrap();
 
+    let msg = RateProviderInstantiateMsg {
+        asset_infos: asset_infos.clone(),
+        exchange_rate: Decimal::from_ratio(1u128, 5u128),
+    };
+
+    let rate_provider = app
+        .instantiate_contract(
+            rate_provider_contract_code_id,
+            owner.clone(),
+            &msg,
+            &[],
+            String::from("PAIR"),
+            None,
+        )
+        .unwrap();
+
     let msg = FactoryExecuteMsg::CreatePair {
         pair_type: PairType::MetaStable {},
-        asset_infos: [
-            AssetInfo::Token {
-                contract_addr: token_x_instance.clone(),
-            },
-            AssetInfo::Token {
-                contract_addr: token_y_instance.clone(),
-            },
-        ],
-        init_params: Some(to_binary(&MetaStablePoolParams { amp: 100 }).unwrap()),
+        asset_infos: asset_infos.clone(),
+        init_params: Some(
+            to_binary(&MetaStablePoolParams {
+                amp: 100,
+                er_provider_addr: rate_provider.to_string(),
+                er_cache_btl: 100u64,
+            })
+            .unwrap(),
+        ),
     };
 
     app.execute_contract(owner.clone(), factory_instance.clone(), &msg, &[])
         .unwrap();
 
     let msg = FactoryQueryMsg::Pair {
-        asset_infos: [
-            AssetInfo::Token {
-                contract_addr: token_x_instance.clone(),
-            },
-            AssetInfo::Token {
-                contract_addr: token_y_instance.clone(),
-            },
-        ],
+        asset_infos: asset_infos.clone(),
     };
 
     let res: PairInfo = app
@@ -579,21 +628,70 @@ fn create_pair_with_same_assets() {
 
     let token_contract_code_id = store_token_code(&mut router);
     let pair_contract_code_id = store_pair_code(&mut router);
+    let rate_provider_contract_code_id = store_rate_provider_code(&mut router);
+    let doubling_asset_infos = [
+        AssetInfo::NativeToken {
+            denom: "uusd".to_string(),
+        },
+        AssetInfo::NativeToken {
+            denom: "uusd".to_string(),
+        },
+    ];
 
-    let msg = InstantiateMsg {
+    let msg = RateProviderInstantiateMsg {
+        asset_infos: doubling_asset_infos.clone(),
+        exchange_rate: Decimal::from_ratio(1u128, 5u128),
+    };
+
+    let rate_provider = router
+        .instantiate_contract(
+            rate_provider_contract_code_id,
+            owner.clone(),
+            &msg,
+            &[],
+            String::from("PAIR"),
+            None,
+        )
+        .unwrap_err();
+
+    assert_eq!(rate_provider.to_string(), "Doubling assets in asset infos");
+
+    // reinit rate provider with different assets
+    let msg = RateProviderInstantiateMsg {
         asset_infos: [
             AssetInfo::NativeToken {
                 denom: "uusd".to_string(),
             },
             AssetInfo::NativeToken {
-                denom: "uusd".to_string(),
+                denom: "uluna".to_string(),
             },
         ],
+        exchange_rate: Decimal::from_ratio(1u128, 5u128),
+    };
+
+    let rate_provider = router
+        .instantiate_contract(
+            rate_provider_contract_code_id,
+            owner.clone(),
+            &msg,
+            &[],
+            String::from("PAIR"),
+            None,
+        )
+        .unwrap();
+
+    let msg = InstantiateMsg {
+        asset_infos: doubling_asset_infos.clone(),
         token_code_id: token_contract_code_id,
         factory_addr: String::from("factory"),
-        er_provider_addr: String::from("er_provider"),
-        er_cache_btl: 100u64,
-        init_params: None,
+        init_params: Some(
+            to_binary(&MetaStablePoolParams {
+                amp: 100,
+                er_provider_addr: rate_provider.into_string(),
+                er_cache_btl: 100u64,
+            })
+            .unwrap(),
+        ),
     };
 
     let resp = router
@@ -617,6 +715,15 @@ fn update_pair_config() {
 
     let token_contract_code_id = store_token_code(&mut router);
     let pair_contract_code_id = store_pair_code(&mut router);
+    let rate_provider_contract_code_id = store_rate_provider_code(&mut router);
+    let asset_infos = [
+        AssetInfo::NativeToken {
+            denom: "uusd".to_string(),
+        },
+        AssetInfo::NativeToken {
+            denom: "uluna".to_string(),
+        },
+    ];
 
     let factory_code_id = store_factory_code(&mut router);
 
@@ -640,20 +747,34 @@ fn update_pair_config() {
         )
         .unwrap();
 
+    let msg = RateProviderInstantiateMsg {
+        asset_infos: asset_infos.clone(),
+        exchange_rate: Decimal::from_ratio(1u128, 5u128),
+    };
+
+    let rate_provider = router
+        .instantiate_contract(
+            rate_provider_contract_code_id,
+            owner.clone(),
+            &msg,
+            &[],
+            String::from("PAIR"),
+            None,
+        )
+        .unwrap();
+
     let msg = InstantiateMsg {
-        asset_infos: [
-            AssetInfo::NativeToken {
-                denom: "uusd".to_string(),
-            },
-            AssetInfo::NativeToken {
-                denom: "uluna".to_string(),
-            },
-        ],
+        asset_infos: asset_infos.clone(),
         token_code_id: token_contract_code_id,
         factory_addr: factory_instance.to_string(),
-        er_provider_addr: String::from("er_provider"),
-        er_cache_btl: 100u64,
-        init_params: Some(to_binary(&MetaStablePoolParams { amp: 100 }).unwrap()),
+        init_params: Some(
+            to_binary(&MetaStablePoolParams {
+                amp: 100,
+                er_provider_addr: rate_provider.into_string(),
+                er_cache_btl: 100u64,
+            })
+            .unwrap(),
+        ),
     };
 
     let pair = router
@@ -679,7 +800,7 @@ fn update_pair_config() {
     // Start changing amp with incorrect next amp
     let msg = ExecuteMsg::UpdateConfig {
         params: Some(
-            to_binary(&MetaStablePoolUpdateParams::StartChangingAmp {
+            to_binary(&MetaStablePoolUpdateAmp::StartChangingAmp {
                 next_amp: MAX_AMP + 1,
                 next_amp_time: router.block_info().time.seconds(),
             })
@@ -704,7 +825,7 @@ fn update_pair_config() {
     // Start changing amp with big difference between the old and new amp value
     let msg = ExecuteMsg::UpdateConfig {
         params: Some(
-            to_binary(&MetaStablePoolUpdateParams::StartChangingAmp {
+            to_binary(&MetaStablePoolUpdateAmp::StartChangingAmp {
                 next_amp: 100 * MAX_AMP_CHANGE + 1,
                 next_amp_time: router.block_info().time.seconds(),
             })
@@ -729,7 +850,7 @@ fn update_pair_config() {
     // Start changing amp before the MIN_AMP_CHANGING_TIME has elapsed
     let msg = ExecuteMsg::UpdateConfig {
         params: Some(
-            to_binary(&MetaStablePoolUpdateParams::StartChangingAmp {
+            to_binary(&MetaStablePoolUpdateAmp::StartChangingAmp {
                 next_amp: 250,
                 next_amp_time: router.block_info().time.seconds(),
             })
@@ -758,7 +879,7 @@ fn update_pair_config() {
 
     let msg = ExecuteMsg::UpdateConfig {
         params: Some(
-            to_binary(&MetaStablePoolUpdateParams::StartChangingAmp {
+            to_binary(&MetaStablePoolUpdateAmp::StartChangingAmp {
                 next_amp: 250,
                 next_amp_time: router.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
             })
@@ -805,7 +926,7 @@ fn update_pair_config() {
 
     let msg = ExecuteMsg::UpdateConfig {
         params: Some(
-            to_binary(&MetaStablePoolUpdateParams::StartChangingAmp {
+            to_binary(&MetaStablePoolUpdateAmp::StartChangingAmp {
                 next_amp: 50,
                 next_amp_time: router.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
             })
@@ -834,7 +955,7 @@ fn update_pair_config() {
 
     // Stop changing amp
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(to_binary(&MetaStablePoolUpdateParams::StopChangingAmp {}).unwrap()),
+        params: Some(to_binary(&MetaStablePoolUpdateAmp::StopChangingAmp {}).unwrap()),
         er_cache_btl: None,
         er_provider_addr: None,
     };
