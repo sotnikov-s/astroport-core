@@ -62,6 +62,9 @@ pub enum ContractError {
 
     #[error("Generator address is not set in factory. Cannot autostake")]
     AutoStakeError {},
+
+    #[error("Exchange rate provider address is invalid")]
+    InvalidRateProviderError {},
 }
 
 impl From<OverflowError> for ContractError {

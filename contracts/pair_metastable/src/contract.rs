@@ -1513,6 +1513,10 @@ pub fn update_config(
         return Err(ContractError::Unauthorized {});
     }
 
+    let mut config_changed = false;
+    let mut er_cache = ER_CACHE.load(deps.storage)?;
+    let mut er_cache_changed = false;
+
     if let Some(p) = params {
         match from_binary::<MetaStablePoolUpdateParams>(&p)? {
             MetaStablePoolUpdateParams::StartChangingAmp {
@@ -1523,19 +1527,44 @@ pub fn update_config(
                 stop_changing_amp(&mut config, deps.storage, env)?
             }
         }
+        config_changed = true;
     }
 
     if let Some(a) = er_provider_addr {
         config.er_provider_addr = addr_validate_to_lower(deps.api, a.as_str())?;
+        match query_exchange_rate(
+            &deps.querier,
+            er_cache.asset_infos[0],
+            er_cache.asset_infos[1],
+            config.er_provider_addr,
+        ) {
+            Ok(resp) => {
+                er_cache.update_rate(
+                    [&er_cache.asset_infos[0], &er_cache.asset_infos[1]],
+                    resp.exchange_rate,
+                    env.block.height,
+                )?;
+                config_changed = true;
+                er_cache_changed = true;
+            }
+            Err(err) => return Err(ContractError::InvalidRateProviderError {}),
+        }
     }
 
     if let Some(t) = er_cache_btl {
-        ER_CACHE.update(deps.storage, |mut prev_state| -> StdResult<_> {
-            prev_state.update_btl(t);
-            Ok(prev_state)
-        })?;
+        if t == 0 {
+            return Err(ContractError::IncorrectAmp {});
+        }
+        er_cache.update_btl(t);
+        er_cache_changed = true;
     }
 
+    if config_changed {
+        CONFIG.save(deps.storage, &config)?;
+    }
+    if er_cache_changed {
+        ER_CACHE.save(deps.storage, &er_cache)?;
+    }
     Ok(Response::default())
 }
 
@@ -1585,8 +1614,6 @@ fn start_changing_amp(
     config.init_amp_time = block_time;
     config.next_amp_time = next_amp_time;
 
-    CONFIG.save(storage, &config)?;
-
     Ok(())
 }
 
@@ -1606,9 +1633,6 @@ fn stop_changing_amp(config: &mut Config, storage: &mut dyn Storage, env: Env) -
     config.next_amp = current_amp;
     config.init_amp_time = block_time;
     config.next_amp_time = block_time;
-
-    // now (block_time < next_amp_time) is always False, so we return the saved AMP
-    CONFIG.save(storage, &config)?;
 
     Ok(())
 }
