@@ -335,9 +335,9 @@ fn test_compatibility_of_tokens_with_different_precision() {
 
     let token_code_id = store_token_code(&mut app);
 
-    let x_amount = Uint128::new(1000000_00000);
+    let x_amount = Uint128::new(5000000_00000);
     let y_amount = Uint128::new(1000000_0000000);
-    let x_offer = Uint128::new(1_00000);
+    let x_offer = Uint128::new(5_00000);
     let y_expected_return = Uint128::new(1_0000000);
 
     let token_name = "Xtoken";
