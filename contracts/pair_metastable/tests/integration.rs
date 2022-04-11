@@ -10,7 +10,8 @@ use astroport::pair_metastable::{
     MetaStablePoolParams, MetaStablePoolUpdateAmp, QueryMsg,
 };
 
-use astroport::fixed_rate_provider::InstantiateMsg as RateProviderInstantiateMsg;
+use astroport::fixed_rate_provider::{InstantiateMsg as RateProviderInstantiateMsg, QueryMsg as RateProviderQueryMsg};
+use astroport::rate_provider::GetExchangeRateResponse;
 use astroport::token::InstantiateMsg as TokenInstantiateMsg;
 use astroport_pair_metastable::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
 use cosmwasm_std::testing::{mock_env, MockApi, MockStorage};
@@ -770,7 +771,7 @@ fn update_pair_config() {
         init_params: Some(
             to_binary(&MetaStablePoolParams {
                 amp: 100,
-                er_provider_addr: rate_provider.into_string(),
+                er_provider_addr: rate_provider.clone().into_string(),
                 er_cache_btl: 100u64,
             })
             .unwrap(),
@@ -796,6 +797,20 @@ fn update_pair_config() {
     let params: MetaStablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
 
     assert_eq!(params.amp, Decimal::from_ratio(100u32, 1u32));
+    assert_eq!(params.er_cache_btl, 100u64);
+    assert_eq!(params.er_provider_addr, rate_provider.clone().into_string());
+
+    let msg = RateProviderQueryMsg::GetExchangeRate {
+        offer_asset: asset_infos[0].clone(),
+        ask_asset: asset_infos[1].clone(),
+    };
+
+    let res: GetExchangeRateResponse = router
+        .wrap()
+        .query_wasm_smart(rate_provider.clone(), &msg)
+        .unwrap();
+    
+    assert_eq!(res.exchange_rate, Decimal::from_ratio(1u128, 5u128));
 
     // Start changing amp with incorrect next amp
     let msg = ExecuteMsg::UpdateConfig {
@@ -976,4 +991,55 @@ fn update_pair_config() {
     let params: MetaStablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
 
     assert_eq!(params.amp, Decimal::from_ratio(150u32, 1u32));
+
+    // change rate provider
+    let rate_provider_contract_code_id = store_rate_provider_code(&mut router);
+    
+    let msg = RateProviderInstantiateMsg {
+        asset_infos: asset_infos.clone(),
+        exchange_rate: Decimal::from_ratio(1u128, 10u128),
+    };
+    
+    let new_rate_provider = router
+    .instantiate_contract(
+        rate_provider_contract_code_id,
+        owner.clone(),
+        &msg,
+        &[],
+        String::from("PAIR"),
+        None,
+    )
+    .unwrap();
+    
+    let msg = ExecuteMsg::UpdateConfig {
+        params: None,
+        er_cache_btl: Some(555u64),
+        er_provider_addr: Some(new_rate_provider.clone().into_string()),
+    };
+
+    router
+        .execute_contract(owner.clone(), pair.clone(), &msg, &[])
+        .unwrap();
+
+    let res: ConfigResponse = router
+        .wrap()
+        .query_wasm_smart(pair.clone(), &QueryMsg::Config {})
+        .unwrap();
+
+    let params: MetaStablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
+
+    assert_eq!(params.er_cache_btl, 555u64);
+    assert_eq!(params.er_provider_addr, new_rate_provider.clone().into_string());
+
+    let msg = RateProviderQueryMsg::GetExchangeRate {
+        offer_asset: asset_infos[0].clone(),
+        ask_asset: asset_infos[1].clone(),
+    };
+
+    let res: GetExchangeRateResponse = router
+        .wrap()
+        .query_wasm_smart(new_rate_provider, &msg)
+        .unwrap();
+    
+    assert_eq!(res.exchange_rate, Decimal::from_ratio(1u128, 10u128));
 }
