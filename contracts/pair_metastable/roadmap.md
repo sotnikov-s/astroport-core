@@ -21,5 +21,5 @@ Tests:
 - [x] query_share provides the amount of assets in accordance with the pool exchange rate
 - [x] provide_liquidity's slippage tolerance is applied taking into account the exchange rate __(no changes were required)__
 - [x] withdraw_liquidity returns the amount of assets proportional to the exchange rate __(no changes were required)__
-- [ ] update exchange rate provider address
-- [ ] update exchange rate cache blocks to live parameter
+- [x] update exchange rate provider address
+- [x] update exchange rate cache blocks to live parameter
