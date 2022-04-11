@@ -10,7 +10,7 @@ Flow:
 - [x] incorporate exchange rate into withdraw_liquidity flow __(no changes were required)__
 - [x] appropriate slippage calculation (not the zero one like in an ordinary stableswap pool, but the one based on accrued asset amount deviation from offer_asset modified by the exchange_rate) __(no changes were required)__
 - [x] implement mock for rate provider to be used in tests
-- [ ] enhance pool factory to be capable of instantiating pairs of metastableswap type
+- [x] enhance pool factory to be capable of instantiating pairs of metastableswap type
 - [ ] adapt documentation
 - [ ] clean up package (remove stableswap pool copy leftovers, cover code with comments)
 - [ ] make sure we stick with astroport code, naming and comments patterns
