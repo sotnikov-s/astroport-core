@@ -1,28 +1,10 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::asset::{Asset, AssetInfo};
+use crate::asset::Asset;
 
 use cosmwasm_std::{Binary, Decimal, Uint128};
 use cw20::Cw20ReceiveMsg;
-
-/// ## Description
-/// This structure describes the parameters used for creating a contract.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct InstantiateMsg {
-    /// Information about the two assets in the pool
-    pub asset_infos: [AssetInfo; 2],
-    /// The token contract code ID used for the tokens in the pool
-    pub token_code_id: u64,
-    /// The factory contract address
-    pub factory_addr: String,
-    /// The exchange rate provider contract address
-    pub er_provider_addr: String,
-    /// The amount of blocks after that cached exchange rate expires
-    pub er_cache_btl: u64,
-    /// Optional binary serialised parameters for custom pool types
-    pub init_params: Option<Binary>,
-}
 
 /// ## Description
 /// This structure describes the execute messages available in the contract.
@@ -165,6 +147,10 @@ pub struct MigrateMsg {}
 pub struct MetaStablePoolParams {
     /// The current metastableswap pool amplification
     pub amp: u64,
+    /// The exchange rate provider contract address
+    pub er_provider_addr: String,
+    /// The amount of blocks after that cached exchange rate expires
+    pub er_cache_btl: u64,
 }
 
 /// ## Description
@@ -184,7 +170,7 @@ pub struct MetaStablePoolConfig {
 /// This enum stores the options available to start and stop changing a metastableswap pool's amplification.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum MetaStablePoolUpdateParams {
+pub enum MetaStablePoolUpdateAmp {
     StartChangingAmp { next_amp: u64, next_amp_time: u64 },
     StopChangingAmp {},
 }

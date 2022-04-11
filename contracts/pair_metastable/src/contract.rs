@@ -17,11 +17,11 @@ use astroport::asset::{addr_validate_to_lower, format_lp_token_name, Asset, Asse
 use astroport::factory::PairType;
 
 use astroport::generator::Cw20HookMsg as GeneratorHookMsg;
-use astroport::pair::{DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE, TWAP_PRECISION};
+use astroport::pair::{InstantiateMsg, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE, TWAP_PRECISION};
 use astroport::pair_metastable::{
-    ConfigResponse, CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg,
-    MetaStablePoolConfig, MetaStablePoolParams, MetaStablePoolUpdateParams, MigrateMsg,
-    PoolResponse, QueryMsg, ReverseSimulationResponse, SimulationResponse,
+    ConfigResponse, CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, MetaStablePoolConfig,
+    MetaStablePoolParams, MetaStablePoolUpdateAmp, MigrateMsg, PoolResponse, QueryMsg,
+    ReverseSimulationResponse, SimulationResponse,
 };
 use astroport::querier::{
     query_factory_config, query_fee_info, query_supply, query_token_precision,
@@ -72,14 +72,14 @@ pub fn instantiate(
         return Err(ContractError::InitParamsNotFound {});
     }
 
-    if msg.er_cache_btl == 0 {
-        return Err(ContractError::IncorrectErCacheBTL {});
-    }
-
     let params: MetaStablePoolParams = from_binary(&msg.init_params.unwrap())?;
 
     if params.amp == 0 || params.amp > MAX_AMP {
         return Err(ContractError::IncorrectAmp {});
+    }
+
+    if params.er_cache_btl == 0 {
+        return Err(ContractError::IncorrectErCacheBTL {});
     }
 
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
@@ -92,7 +92,7 @@ pub fn instantiate(
             pair_type: PairType::MetaStable {},
         },
         factory_addr: addr_validate_to_lower(deps.api, msg.factory_addr.as_str())?,
-        er_provider_addr: addr_validate_to_lower(deps.api, msg.er_provider_addr.as_str())?,
+        er_provider_addr: addr_validate_to_lower(deps.api, params.er_provider_addr.as_str())?,
         block_time_last: 0,
         price0_cumulative_last: Uint128::zero(),
         price1_cumulative_last: Uint128::zero(),
@@ -103,11 +103,11 @@ pub fn instantiate(
     };
     CONFIG.save(deps.storage, &config)?;
 
-    let mut er_cache = TmpPairExchangeRate::new(msg.asset_infos.clone(), msg.er_cache_btl);
+    let mut er_cache = TmpPairExchangeRate::new(msg.asset_infos.clone(), params.er_cache_btl);
     let er = query_exchange_rate(
         &deps.querier,
-        msg.asset_infos[0].clone(),
-        msg.asset_infos[1].clone(),
+        &msg.asset_infos[0],
+        &msg.asset_infos[1],
         config.er_provider_addr,
     )?;
     er_cache.update_rate(
@@ -219,7 +219,7 @@ pub fn execute(
             params,
             er_provider_addr,
             er_cache_btl,
-        } => update_config(deps, env, info, params, er_provider_addr, er_cache_btl),
+        } => update_config(deps, &env, info, params, er_provider_addr, er_cache_btl),
         ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
         ExecuteMsg::ProvideLiquidity {
             assets,
@@ -1337,12 +1337,7 @@ fn get_and_cache_exchange_rate(
     }
 
     let er_provider_address = CONFIG.load(storage)?.er_provider_addr;
-    let er = query_exchange_rate(
-        querier,
-        offer_asset.clone(),
-        ask_asset.clone(),
-        er_provider_address,
-    )?;
+    let er = query_exchange_rate(querier, &offer_asset, &ask_asset, er_provider_address)?;
     ER_CACHE.update(storage, |mut prev_state| -> StdResult<_> {
         prev_state.update_rate([&offer_asset, &ask_asset], er.exchange_rate, height)?;
         Ok(prev_state)
@@ -1364,7 +1359,7 @@ fn get_exchange_rate(
     }
 
     let er_provider_address = CONFIG.load(storage)?.er_provider_addr;
-    let er = query_exchange_rate(querier, offer_asset, ask_asset, er_provider_address)?;
+    let er = query_exchange_rate(querier, &offer_asset, &ask_asset, er_provider_address)?;
     Ok(er.exchange_rate)
 }
 
@@ -1500,7 +1495,7 @@ pub fn pool_info(deps: Deps, config: Config) -> StdResult<([Asset; 2], Uint128)>
 /// * **params** is an object of type [`Binary`]. These are the the new parameter values.
 pub fn update_config(
     deps: DepsMut,
-    env: Env,
+    env: &Env,
     info: MessageInfo,
     params: Option<Binary>,
     er_provider_addr: Option<String>,
@@ -1518,14 +1513,12 @@ pub fn update_config(
     let mut er_cache_changed = false;
 
     if let Some(p) = params {
-        match from_binary::<MetaStablePoolUpdateParams>(&p)? {
-            MetaStablePoolUpdateParams::StartChangingAmp {
+        match from_binary::<MetaStablePoolUpdateAmp>(&p)? {
+            MetaStablePoolUpdateAmp::StartChangingAmp {
                 next_amp,
                 next_amp_time,
-            } => start_changing_amp(&mut config, deps.storage, env, next_amp, next_amp_time)?,
-            MetaStablePoolUpdateParams::StopChangingAmp {} => {
-                stop_changing_amp(&mut config, deps.storage, env)?
-            }
+            } => start_changing_amp(&mut config, &env, next_amp, next_amp_time)?,
+            MetaStablePoolUpdateAmp::StopChangingAmp {} => stop_changing_amp(&mut config, &env)?,
         }
         config_changed = true;
     }
@@ -1534,20 +1527,23 @@ pub fn update_config(
         config.er_provider_addr = addr_validate_to_lower(deps.api, a.as_str())?;
         match query_exchange_rate(
             &deps.querier,
-            er_cache.asset_infos[0],
-            er_cache.asset_infos[1],
-            config.er_provider_addr,
+            &er_cache.asset_infos[0],
+            &er_cache.asset_infos[1],
+            config.er_provider_addr.clone(),
         ) {
             Ok(resp) => {
                 er_cache.update_rate(
-                    [&er_cache.asset_infos[0], &er_cache.asset_infos[1]],
+                    [
+                        &er_cache.asset_infos[0].clone(),
+                        &er_cache.asset_infos[1].clone(),
+                    ],
                     resp.exchange_rate,
                     env.block.height,
                 )?;
                 config_changed = true;
                 er_cache_changed = true;
             }
-            Err(err) => return Err(ContractError::InvalidRateProviderError {}),
+            Err(_) => return Err(ContractError::InvalidRateProviderError {}),
         }
     }
 
@@ -1582,8 +1578,7 @@ pub fn update_config(
 /// * **next_amp_time** is an object of type [`u64`]. This is the end time when the pool amplification will be equal to `next_amp`.
 fn start_changing_amp(
     config: &mut Config,
-    storage: &mut dyn Storage,
-    env: Env,
+    env: &Env,
     next_amp: u64,
     next_amp_time: u64,
 ) -> Result<(), ContractError> {
@@ -1625,7 +1620,7 @@ fn start_changing_amp(
 /// * **deps** is an object of type [`DepsMut`].
 ///
 /// * **env** is an object of type [`Env`].
-fn stop_changing_amp(config: &mut Config, storage: &mut dyn Storage, env: Env) -> StdResult<()> {
+fn stop_changing_amp(config: &mut Config, env: &Env) -> StdResult<()> {
     let current_amp = compute_current_amp(&config, &env)?;
     let block_time = env.block.time.seconds();
 

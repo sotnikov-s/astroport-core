@@ -35,8 +35,8 @@ pub struct GetExchangeRateResponse {
 /// * **asset** is an object of type [`Asset`]. This is the asset for which we return the simulated price.
 pub fn query_exchange_rate(
     querier: &QuerierWrapper,
-    offer_asset: AssetInfo,
-    ask_asset: AssetInfo,
+    offer_asset: &AssetInfo,
+    ask_asset: &AssetInfo,
     rate_provider_contract: Addr,
 ) -> StdResult<GetExchangeRateResponse> {
     querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
