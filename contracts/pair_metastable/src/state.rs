@@ -1,6 +1,5 @@
 use astroport::asset::{AssetInfo, PairInfo};
-use cosmwasm_bignumber::Decimal256;
-use cosmwasm_std::{Addr, Decimal, StdError, StdResult, Uint128};
+use cosmwasm_std::{Addr, Decimal, Fraction, StdError, StdResult, Uint128};
 use cw_storage_plus::Item;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -47,13 +46,24 @@ pub struct TmpPairExchangeRate {
 }
 
 impl TmpPairExchangeRate {
-    pub fn new(asset_infos: [AssetInfo; 2], btl: u64) -> Self {
-        TmpPairExchangeRate {
+    pub fn new(
+        asset_infos: [AssetInfo; 2],
+        exchange_rate: Decimal,
+        height: u64,
+        btl: u64,
+    ) -> StdResult<Self> {
+        if exchange_rate <= Decimal::zero() {
+            return Err(StdError::generic_err(
+                "Exchange rate must be greater that zero",
+            ));
+        }
+
+        Ok(TmpPairExchangeRate {
             asset_infos,
             btl,
-            exchange_rate: Decimal::zero(),
-            height: 0u64,
-        }
+            exchange_rate,
+            height,
+        })
     }
 
     /// ## Description
@@ -65,7 +75,7 @@ impl TmpPairExchangeRate {
         } else if asset_infos[0].equal(&self.asset_infos[1])
             && asset_infos[1].equal(&self.asset_infos[0])
         {
-            return Ok((Decimal256::one() / Decimal256::from(self.exchange_rate)).into());
+            return Ok(self.exchange_rate.inv().unwrap());
         }
         return Err(StdError::generic_err(
             "Given assets don't belong to the pair",
@@ -80,6 +90,12 @@ impl TmpPairExchangeRate {
         exchange_rate: Decimal,
         height: u64,
     ) -> StdResult<()> {
+        if exchange_rate <= Decimal::zero() {
+            return Err(StdError::generic_err(
+                "Exchange rate must be greater that zero",
+            ));
+        }
+
         if asset_infos[0].equal(&self.asset_infos[0]) && asset_infos[1].equal(&self.asset_infos[1])
         {
             self.exchange_rate = exchange_rate;
@@ -88,7 +104,7 @@ impl TmpPairExchangeRate {
         } else if asset_infos[0].equal(&self.asset_infos[1])
             && asset_infos[1].equal(&self.asset_infos[0])
         {
-            self.exchange_rate = (Decimal256::one() / Decimal256::from(self.exchange_rate)).into();
+            self.exchange_rate = exchange_rate.inv().unwrap();
             self.height = height;
             return Ok(());
         }
@@ -126,16 +142,20 @@ mod tests {
         };
 
         // check proper initialization
-        let mut er = TmpPairExchangeRate::new([asset_0.clone(), asset_1.clone()], 10);
+        let mut er = TmpPairExchangeRate::new(
+            [asset_0.clone(), asset_1.clone()],
+            Decimal::from_ratio(1u128, 5u128),
+            1u64,
+            10u64,
+        )
+        .unwrap();
+        assert_eq!(er.asset_infos[0], asset_0);
+        assert_eq!(er.asset_infos[1], asset_1);
         assert_eq!(er.btl, 10);
-        assert_eq!(er.height, 0);
-        assert_eq!(er.exchange_rate, Decimal::zero());
+        assert_eq!(er.height, 1);
+        assert_eq!(er.exchange_rate, Decimal::from_ratio(1u128, 5u128));
 
         // check cached value expiration
-        assert_eq!(
-            er.update_rate([&asset_0, &asset_1], Decimal::from_ratio(1u128, 5u128), 1),
-            Ok(())
-        );
         assert_eq!(er.is_expired(1), false);
         assert_eq!(er.is_expired(11), true);
 
@@ -196,6 +216,14 @@ mod tests {
         assert_eq!(
             er.get_rate([&asset_1, &asset_0]),
             Ok(Decimal::from_ratio(5u128, 2u128))
+        );
+
+        // check update rate with zero
+        assert_eq!(
+            er.update_rate([&asset_0, &asset_1], Decimal::zero(), 1),
+            Err(StdError::generic_err(
+                "Exchange rate must be greater that zero",
+            ))
         );
     }
 }

@@ -103,17 +103,17 @@ pub fn instantiate(
     };
     CONFIG.save(deps.storage, &config)?;
 
-    let mut er_cache = TmpPairExchangeRate::new(msg.asset_infos.clone(), params.er_cache_btl);
     let er = query_exchange_rate(
         &deps.querier,
         &msg.asset_infos[0],
         &msg.asset_infos[1],
         config.er_provider_addr,
     )?;
-    er_cache.update_rate(
-        [&msg.asset_infos[0], &msg.asset_infos[1]],
+    let er_cache = TmpPairExchangeRate::new(
+        msg.asset_infos.clone(),
         er.exchange_rate,
         env.block.height,
+        params.er_cache_btl,
     )?;
     ER_CACHE.save(deps.storage, &er_cache)?;
 
