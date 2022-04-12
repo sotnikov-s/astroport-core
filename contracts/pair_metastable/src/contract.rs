@@ -1509,8 +1509,6 @@ pub fn update_config(
     }
 
     let mut config_changed = false;
-    let mut er_cache = ER_CACHE.load(deps.storage)?;
-    let mut er_cache_changed = false;
 
     if let Some(p) = params {
         match from_binary::<MetaStablePoolUpdateAmp>(&p)? {
@@ -1523,43 +1521,44 @@ pub fn update_config(
         config_changed = true;
     }
 
-    if let Some(a) = er_provider_addr {
-        config.er_provider_addr = addr_validate_to_lower(deps.api, a.as_str())?;
-        match query_exchange_rate(
-            &deps.querier,
-            &er_cache.asset_infos[0],
-            &er_cache.asset_infos[1],
-            config.er_provider_addr.clone(),
-        ) {
-            Ok(resp) => {
-                er_cache.update_rate(
-                    [
-                        &er_cache.asset_infos[0].clone(),
-                        &er_cache.asset_infos[1].clone(),
-                    ],
-                    resp.exchange_rate,
-                    env.block.height,
-                )?;
-                config_changed = true;
-                er_cache_changed = true;
-            }
-            Err(_) => return Err(ContractError::InvalidRateProviderError {}),
-        }
-    }
+    if er_provider_addr.is_some() || er_cache_btl.is_some() {
+        let mut er_cache = ER_CACHE.load(deps.storage)?;
 
-    if let Some(t) = er_cache_btl {
-        if t == 0 {
-            return Err(ContractError::IncorrectAmp {});
+        if let Some(a) = er_provider_addr {
+            config.er_provider_addr = addr_validate_to_lower(deps.api, a.as_str())?;
+            match query_exchange_rate(
+                &deps.querier,
+                &er_cache.asset_infos[0],
+                &er_cache.asset_infos[1],
+                config.er_provider_addr.clone(),
+            ) {
+                Ok(resp) => {
+                    er_cache.update_rate(
+                        [
+                            &er_cache.asset_infos[0].clone(),
+                            &er_cache.asset_infos[1].clone(),
+                        ],
+                        resp.exchange_rate,
+                        env.block.height,
+                    )?;
+                    config_changed = true;
+                }
+                Err(_) => return Err(ContractError::InvalidRateProviderError {}),
+            }
         }
-        er_cache.update_btl(t);
-        er_cache_changed = true;
+
+        if let Some(t) = er_cache_btl {
+            if t == 0 {
+                return Err(ContractError::IncorrectAmp {});
+            }
+            er_cache.update_btl(t);
+        }
+
+        ER_CACHE.save(deps.storage, &er_cache)?;
     }
 
     if config_changed {
         CONFIG.save(deps.storage, &config)?;
-    }
-    if er_cache_changed {
-        ER_CACHE.save(deps.storage, &er_cache)?;
     }
     Ok(Response::default())
 }
