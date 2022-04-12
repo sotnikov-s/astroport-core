@@ -3,10 +3,9 @@ use crate::state::{Config, CONFIG};
 use astroport::asset::AssetInfo;
 use astroport::fixed_rate_provider::{ConfigResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
 use astroport::rate_provider::GetExchangeRateResponse;
-use cosmwasm_bignumber::Decimal256;
 use cosmwasm_std::{
-    entry_point, to_binary, Binary, Decimal, Deps, DepsMut, Env, MessageInfo, Response, StdError,
-    StdResult,
+    entry_point, to_binary, Binary, Decimal, Deps, DepsMut, Env, Fraction, MessageInfo, Response,
+    StdError, StdResult,
 };
 
 /// ## Description
@@ -32,6 +31,10 @@ pub fn instantiate(
 
     if msg.asset_infos[0] == msg.asset_infos[1] {
         return Err(ContractError::DoublingAssets {});
+    }
+
+    if msg.exchange_rate <= Decimal::zero() {
+        return Err(ContractError::InvalidExchangeRate {});
     }
 
     let config = Config {
@@ -89,6 +92,10 @@ pub fn update_exchange_rate(
     _info: MessageInfo,
     exchange_rate: Decimal,
 ) -> Result<Response, ContractError> {
+    if exchange_rate <= Decimal::zero() {
+        return Err(ContractError::InvalidExchangeRate {});
+    }
+
     CONFIG.update(deps.storage, |mut prev_state| -> StdResult<_> {
         prev_state.exchange_rate = exchange_rate;
         Ok(prev_state)
@@ -144,7 +151,7 @@ pub fn query_rate(
     {
         config.exchange_rate
     } else if config.asset_infos[0].equal(&ask_asset) && config.asset_infos[1].equal(&offer_asset) {
-        (Decimal256::one() / Decimal256::from(config.exchange_rate)).into()
+        config.exchange_rate.inv().unwrap()
     } else {
         return Err(StdError::generic_err(
             "Given ask asset doesn't belong to pairs",

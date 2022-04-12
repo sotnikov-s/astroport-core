@@ -10,4 +10,7 @@ pub enum ContractError {
 
     #[error("Doubling assets in asset infos")]
     DoublingAssets {},
+
+    #[error("Exchange rate must be greater that zero")]
+    InvalidExchangeRate {},
 }
