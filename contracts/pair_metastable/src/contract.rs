@@ -3,7 +3,7 @@ use crate::math::{
     calc_ask_amount, calc_offer_amount, compute_d, upscale, AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE,
     MIN_AMP_CHANGING_TIME, N_COINS,
 };
-use crate::state::{Config, TmpPairExchangeRate, CONFIG, ER_CACHE};
+use crate::state::{CachedExchangeRate, Config, CONFIG, ER_CACHE};
 
 use cosmwasm_bignumber::Decimal256;
 use cosmwasm_std::{
@@ -109,7 +109,7 @@ pub fn instantiate(
         &msg.asset_infos[1],
         config.er_provider_addr,
     )?;
-    let er_cache = TmpPairExchangeRate::new(
+    let er_cache = CachedExchangeRate::new(
         msg.asset_infos.clone(),
         er.exchange_rate,
         env.block.height,
@@ -1184,7 +1184,7 @@ pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePric
 /// * **deps** is an object of type [`Deps`].
 pub fn query_config(deps: Deps, env: Env) -> StdResult<ConfigResponse> {
     let config: Config = CONFIG.load(deps.storage)?;
-    let er_cache: TmpPairExchangeRate = ER_CACHE.load(deps.storage)?;
+    let er_cache: CachedExchangeRate = ER_CACHE.load(deps.storage)?;
     Ok(ConfigResponse {
         block_time_last: config.block_time_last,
         params: Some(to_binary(&MetaStablePoolConfig {

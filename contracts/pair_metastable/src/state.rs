@@ -34,7 +34,7 @@ pub struct Config {
 /// ## Description
 /// This structure stores temporary exchange rate information for a pair.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct TmpPairExchangeRate {
+pub struct CachedExchangeRate {
     /// Asset information for the assets in the pair
     pub asset_infos: [AssetInfo; 2],
     /// The proportion in exchange of asset 0 to asset 1
@@ -45,7 +45,7 @@ pub struct TmpPairExchangeRate {
     pub btl: u64,
 }
 
-impl TmpPairExchangeRate {
+impl CachedExchangeRate {
     pub fn new(
         asset_infos: [AssetInfo; 2],
         exchange_rate: Decimal,
@@ -58,7 +58,7 @@ impl TmpPairExchangeRate {
             ));
         }
 
-        Ok(TmpPairExchangeRate {
+        Ok(CachedExchangeRate {
             asset_infos,
             btl,
             exchange_rate,
@@ -126,7 +126,7 @@ impl TmpPairExchangeRate {
 
 pub const CONFIG: Item<Config> = Item::new("config");
 
-pub const ER_CACHE: Item<TmpPairExchangeRate> = Item::new("er_cache");
+pub const ER_CACHE: Item<CachedExchangeRate> = Item::new("er_cache");
 
 #[cfg(test)]
 mod tests {
@@ -142,7 +142,7 @@ mod tests {
         };
 
         // check proper initialization
-        let mut er = TmpPairExchangeRate::new(
+        let mut er = CachedExchangeRate::new(
             [asset_0.clone(), asset_1.clone()],
             Decimal::from_ratio(1u128, 5u128),
             1u64,
