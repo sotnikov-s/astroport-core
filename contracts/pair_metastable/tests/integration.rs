@@ -7,7 +7,7 @@ use astroport::pair::InstantiateMsg;
 use astroport::pair::TWAP_PRECISION;
 use astroport::pair_metastable::{
     ConfigResponse, CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, MetaStablePoolConfig,
-    MetaStablePoolParams, MetaStablePoolUpdateAmp, QueryMsg,
+    MetaStablePoolParams, MetaStablePoolUpdateParams, QueryMsg,
 };
 
 use astroport::fixed_rate_provider::{
@@ -816,15 +816,11 @@ fn update_pair_config() {
 
     // Start changing amp with incorrect next amp
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&MetaStablePoolUpdateAmp::StartChangingAmp {
-                next_amp: MAX_AMP + 1,
-                next_amp_time: router.block_info().time.seconds(),
-            })
-            .unwrap(),
-        ),
-        er_cache_btl: None,
-        er_provider_addr: None,
+        params: to_binary(&MetaStablePoolUpdateParams::StartChangingAmp {
+            next_amp: MAX_AMP + 1,
+            next_amp_time: router.block_info().time.seconds(),
+        })
+        .unwrap(),
     };
 
     let resp = router
@@ -841,15 +837,11 @@ fn update_pair_config() {
 
     // Start changing amp with big difference between the old and new amp value
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&MetaStablePoolUpdateAmp::StartChangingAmp {
-                next_amp: 100 * MAX_AMP_CHANGE + 1,
-                next_amp_time: router.block_info().time.seconds(),
-            })
-            .unwrap(),
-        ),
-        er_cache_btl: None,
-        er_provider_addr: None,
+        params: to_binary(&MetaStablePoolUpdateParams::StartChangingAmp {
+            next_amp: 100 * MAX_AMP_CHANGE + 1,
+            next_amp_time: router.block_info().time.seconds(),
+        })
+        .unwrap(),
     };
 
     let resp = router
@@ -866,15 +858,11 @@ fn update_pair_config() {
 
     // Start changing amp before the MIN_AMP_CHANGING_TIME has elapsed
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&MetaStablePoolUpdateAmp::StartChangingAmp {
-                next_amp: 250,
-                next_amp_time: router.block_info().time.seconds(),
-            })
-            .unwrap(),
-        ),
-        er_cache_btl: None,
-        er_provider_addr: None,
+        params: to_binary(&MetaStablePoolUpdateParams::StartChangingAmp {
+            next_amp: 250,
+            next_amp_time: router.block_info().time.seconds(),
+        })
+        .unwrap(),
     };
 
     let resp = router
@@ -895,15 +883,11 @@ fn update_pair_config() {
     });
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&MetaStablePoolUpdateAmp::StartChangingAmp {
-                next_amp: 250,
-                next_amp_time: router.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
-            })
-            .unwrap(),
-        ),
-        er_cache_btl: None,
-        er_provider_addr: None,
+        params: to_binary(&MetaStablePoolUpdateParams::StartChangingAmp {
+            next_amp: 250,
+            next_amp_time: router.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
+        })
+        .unwrap(),
     };
 
     router
@@ -942,15 +926,11 @@ fn update_pair_config() {
     });
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&MetaStablePoolUpdateAmp::StartChangingAmp {
-                next_amp: 50,
-                next_amp_time: router.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
-            })
-            .unwrap(),
-        ),
-        er_cache_btl: None,
-        er_provider_addr: None,
+        params: to_binary(&MetaStablePoolUpdateParams::StartChangingAmp {
+            next_amp: 50,
+            next_amp_time: router.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
+        })
+        .unwrap(),
     };
 
     router
@@ -972,9 +952,7 @@ fn update_pair_config() {
 
     // Stop changing amp
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(to_binary(&MetaStablePoolUpdateAmp::StopChangingAmp {}).unwrap()),
-        er_cache_btl: None,
-        er_provider_addr: None,
+        params: to_binary(&MetaStablePoolUpdateParams::StopChangingAmp {}).unwrap(),
     };
 
     router
@@ -1014,9 +992,10 @@ fn update_pair_config() {
         .unwrap();
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: None,
-        er_cache_btl: Some(555u64),
-        er_provider_addr: Some(new_rate_provider.clone().into_string()),
+        params: to_binary(&MetaStablePoolUpdateParams::UpdateRateProvider {
+            address: new_rate_provider.clone().into_string(),
+        })
+        .unwrap(),
     };
 
     router
@@ -1030,7 +1009,7 @@ fn update_pair_config() {
 
     let params: MetaStablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
 
-    assert_eq!(params.er_cache_btl, 555u64);
+    assert_eq!(params.er_cache_btl, 100u64);
     assert_eq!(
         params.er_provider_addr,
         new_rate_provider.clone().into_string()
@@ -1047,4 +1026,22 @@ fn update_pair_config() {
         .unwrap();
 
     assert_eq!(res.exchange_rate, Decimal::from_ratio(1u128, 10u128));
+
+    // change exchange rate cache BTL
+    let msg = ExecuteMsg::UpdateConfig {
+        params: to_binary(&MetaStablePoolUpdateParams::UpdateErCacheBTL { btl: 555u64 }).unwrap(),
+    };
+
+    router
+        .execute_contract(owner.clone(), pair.clone(), &msg, &[])
+        .unwrap();
+
+    let res: ConfigResponse = router
+        .wrap()
+        .query_wasm_smart(pair.clone(), &QueryMsg::Config {})
+        .unwrap();
+
+    let params: MetaStablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
+
+    assert_eq!(params.er_cache_btl, 555u64);
 }

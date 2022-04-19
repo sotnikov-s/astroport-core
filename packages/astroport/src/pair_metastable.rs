@@ -33,11 +33,7 @@ pub enum ExecuteMsg {
         to: Option<String>,
     },
     /// Update the pair configuration
-    UpdateConfig {
-        params: Option<Binary>,
-        er_provider_addr: Option<String>,
-        er_cache_btl: Option<u64>,
-    },
+    UpdateConfig { params: Binary },
 }
 
 /// ## Description
@@ -167,10 +163,12 @@ pub struct MetaStablePoolConfig {
 }
 
 /// ## Description
-/// This enum stores the options available to start and stop changing a metastableswap pool's amplification.
+/// This enum stores the options available to update metastableswap pool parameters.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum MetaStablePoolUpdateAmp {
+pub enum MetaStablePoolUpdateParams {
     StartChangingAmp { next_amp: u64, next_amp_time: u64 },
     StopChangingAmp {},
+    UpdateRateProvider { address: String },
+    UpdateErCacheBTL { btl: u64 },
 }
