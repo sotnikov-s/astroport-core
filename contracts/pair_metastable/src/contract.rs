@@ -754,11 +754,11 @@ pub fn swap(
 
     let offer_amount = offer_asset.amount;
     let er = get_and_cache_exchange_rate(
+        deps.storage,
+        &deps.querier,
         offer_asset.info.clone(),
         ask_pool.info.clone(),
         env.block.height,
-        deps.storage,
-        &deps.querier,
     )?;
     let (return_amount, spread_amount, commission_amount) = compute_swap(
         offer_pool.amount,
@@ -1058,11 +1058,11 @@ pub fn query_simulation(deps: Deps, env: Env, offer_asset: Asset) -> StdResult<S
     )?;
 
     let er = get_exchange_rate(
+        deps.storage,
+        &deps.querier,
         offer_asset.info,
         ask_pool.clone().info,
         env.block.height,
-        deps.storage,
-        &deps.querier,
     )?;
     let (return_amount, spread_amount, commission_amount) = compute_swap(
         offer_pool.amount,
@@ -1320,11 +1320,11 @@ fn compute_offer_amount(
 }
 
 fn get_and_cache_exchange_rate(
+    storage: &mut dyn Storage,
+    querier: &QuerierWrapper,
     offer_asset: AssetInfo,
     ask_asset: AssetInfo,
     height: u64,
-    storage: &mut dyn Storage,
-    querier: &QuerierWrapper,
 ) -> StdResult<Decimal> {
     if let Ok(er) = ER_CACHE.load(storage) {
         if !er.is_expired(height) {
@@ -1342,11 +1342,11 @@ fn get_and_cache_exchange_rate(
 }
 
 fn get_exchange_rate(
+    storage: &dyn Storage,
+    querier: &QuerierWrapper,
     offer_asset: AssetInfo,
     ask_asset: AssetInfo,
     height: u64,
-    storage: &dyn Storage,
-    querier: &QuerierWrapper,
 ) -> StdResult<Decimal> {
     if let Ok(er) = ER_CACHE.load(storage) {
         if !er.is_expired(height) {
