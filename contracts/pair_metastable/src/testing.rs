@@ -1,6 +1,6 @@
 use crate::contract::{
     accumulate_prices, assert_max_spread, execute, instantiate, query_pair_info, query_pool,
-    query_share, query_simulation, reply,
+    query_reverse_simulation, query_share, query_simulation, reply,
 };
 use crate::error::ContractError;
 use crate::math::{calc_ask_amount, calc_offer_amount, AMP_PRECISION};
@@ -12,7 +12,8 @@ use astroport::asset::{Asset, AssetInfo, PairInfo};
 
 use astroport::pair::{InstantiateMsg, TWAP_PRECISION};
 use astroport::pair_metastable::{
-    Cw20HookMsg, ExecuteMsg, MetaStablePoolParams, PoolResponse, SimulationResponse,
+    Cw20HookMsg, ExecuteMsg, MetaStablePoolParams, PoolResponse, ReverseSimulationResponse,
+    SimulationResponse,
 };
 use astroport::token::InstantiateMsg as TokenInstantiateMsg;
 use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
@@ -1388,6 +1389,114 @@ fn test_accumulate_prices() {
             );
         }
     }
+}
+
+#[test]
+fn test_simulations() {
+    let total_share = Uint128::new(50_000_000_000u128);
+    let asset_pool_amount = Uint128::new(20_000_000_000u128);
+    let collateral_pool_amount = Uint128::new(100_000_000_000u128);
+    let offer_amount = Uint128::new(10_000_000_000u128);
+    let ask_amount = Uint128::new(2_000_000_000u128);
+
+    let mut deps = mock_dependencies(&[Coin {
+        denom: "uusd".to_string(),
+        amount: collateral_pool_amount + offer_amount, /* user deposit must be pre-applied */
+    }]);
+
+    deps.querier.with_tax(
+        Decimal::zero(),
+        &[(&"uusd".to_string(), &Uint128::from(1000000u128))],
+    );
+
+    deps.querier.with_token_balances(&[
+        (
+            &String::from("liquidity0000"),
+            &[(&String::from(MOCK_CONTRACT_ADDR), &total_share)],
+        ),
+        (
+            &String::from("asset0000"),
+            &[(&String::from(MOCK_CONTRACT_ADDR), &asset_pool_amount)],
+        ),
+    ]);
+
+    let exchange_rate = Decimal::from_ratio(1u128, 5u128);
+    deps.querier.with_exchange_rates(&[(
+        [
+            AssetInfo::NativeToken {
+                denom: "uusd".to_string(),
+            },
+            AssetInfo::Token {
+                contract_addr: Addr::unchecked("asset0000"),
+            },
+        ],
+        exchange_rate,
+    )]);
+
+    let msg = InstantiateMsg {
+        asset_infos: [
+            AssetInfo::NativeToken {
+                denom: "uusd".to_string(),
+            },
+            AssetInfo::Token {
+                contract_addr: Addr::unchecked("asset0000"),
+            },
+        ],
+        token_code_id: 10u64,
+        factory_addr: String::from("factory"),
+        init_params: Some(
+            to_binary(&MetaStablePoolParams {
+                amp: 100,
+                er_provider_addr: String::from("er_provider"),
+                er_cache_btl: 100u64,
+            })
+            .unwrap(),
+        ),
+    };
+
+    let env = mock_env_with_block_time(100);
+    let info = mock_info("addr0000", &[]);
+    // We can just call .unwrap() to assert this was a success
+    let _res = instantiate(deps.as_mut(), env.clone(), info, msg).unwrap();
+
+    // Store the liquidity token
+    store_liquidity_token(deps.as_mut(), 1, "liquidity0000".to_string());
+
+    let simulation_res: SimulationResponse = query_simulation(
+        deps.as_ref(),
+        env.clone(),
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "uusd".to_string(),
+            },
+            amount: offer_amount,
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        ask_amount,
+        simulation_res.return_amount
+            + simulation_res.spread_amount
+            + simulation_res.commission_amount
+    );
+
+    let rev_simulation_res: ReverseSimulationResponse = query_reverse_simulation(
+        deps.as_ref(),
+        env.clone(),
+        Asset {
+            info: AssetInfo::Token {
+                contract_addr: Addr::unchecked("asset0000"),
+            },
+            amount: ask_amount,
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        offer_amount,
+        rev_simulation_res.offer_amount
+            - rev_simulation_res.spread_amount
+            - rev_simulation_res.commission_amount
+    );
 }
 
 fn mock_env_with_block_time(time: u64) -> Env {

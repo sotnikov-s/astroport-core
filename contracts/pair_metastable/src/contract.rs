@@ -1,7 +1,7 @@
 use crate::error::ContractError;
 use crate::math::{
-    calc_ask_amount, calc_offer_amount, compute_d, upscale, AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE,
-    MIN_AMP_CHANGING_TIME, N_COINS,
+    calc_ask_amount, calc_offer_amount, compute_d, downscale, upscale, AMP_PRECISION, MAX_AMP,
+    MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME, N_COINS,
 };
 use crate::state::{CachedExchangeRate, Config, CONFIG, ER_CACHE};
 
@@ -1122,6 +1122,13 @@ pub fn query_reverse_simulation(
         config.pair_info.pair_type.clone(),
     )?;
 
+    let er = get_exchange_rate(
+        deps.storage,
+        &deps.querier,
+        offer_pool.clone().info,
+        ask_asset.info,
+        env.block.height,
+    )?;
     let (offer_amount, spread_amount, commission_amount) = compute_offer_amount(
         offer_pool.amount,
         query_token_precision(&deps.querier, offer_pool.info)?,
@@ -1129,6 +1136,7 @@ pub fn query_reverse_simulation(
         query_token_precision(&deps.querier, ask_pool.info)?,
         ask_asset.amount,
         fee_info.total_fee_rate,
+        er,
         compute_current_amp(&config, &env)?,
     )?;
 
@@ -1284,14 +1292,21 @@ fn compute_offer_amount(
     ask_precision: u8,
     ask_amount: Uint128,
     commission_rate: Decimal,
+    exchange_rate: Decimal,
     amp: u64,
 ) -> StdResult<(Uint128, Uint128, Uint128)> {
     // ask => offer
 
     let greater_precision = offer_precision.max(ask_precision);
     let offer_pool = adjust_precision(offer_pool, offer_precision, greater_precision)?;
-    let ask_pool = adjust_precision(ask_pool, ask_precision, greater_precision)?;
-    let ask_amount = adjust_precision(ask_amount, ask_precision, greater_precision)?;
+    let ask_pool = downscale(
+        adjust_precision(ask_pool, ask_precision, greater_precision)?,
+        exchange_rate,
+    )?;
+    let ask_amount = downscale(
+        adjust_precision(ask_amount, ask_precision, greater_precision)?,
+        exchange_rate,
+    )?;
 
     let one_minus_commission = Decimal256::one() - Decimal256::from(commission_rate);
     let inv_one_minus_commission: Decimal = (Decimal256::one() / one_minus_commission).into();
