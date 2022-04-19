@@ -1,4 +1,4 @@
-use cosmwasm_std::{Decimal, OverflowError, Uint128};
+use cosmwasm_std::{Decimal, Fraction, OverflowError, Uint128};
 use std::convert::TryFrom;
 
 use astroport::{DecimalCheckedOps, U256};
@@ -116,6 +116,12 @@ pub fn compute_d(leverage: u64, amount_a: u128, amount_b: u128) -> Option<u128> 
 /// Safely applies the factor to amount, returning proportionally changed amount or an overflow error.
 pub fn upscale(amount: Uint128, factor: Decimal) -> Result<Uint128, OverflowError> {
     factor.checked_mul(amount)
+}
+
+/// ## Description
+/// Safely reverses the factor applied to amount, returning proportionally changed amount or an overflow error.
+pub fn downscale(amount: Uint128, factor: Decimal) -> Result<Uint128, OverflowError> {
+    factor.inv().unwrap().checked_mul(amount)
 }
 
 /// ## Description
