@@ -1614,7 +1614,7 @@ fn update_rate_provider(
         &deps.querier,
         &er_cache.asset_infos[0],
         &er_cache.asset_infos[1],
-        config.er_provider_addr,
+        config.er_provider_addr.clone(),
     ) {
         Ok(resp) => {
             er_cache.update_rate(
@@ -1626,6 +1626,7 @@ fn update_rate_provider(
                 env.block.height,
             )?;
             ER_CACHE.save(deps.storage, &er_cache)?;
+            CONFIG.save(deps.storage, &config)?;
 
             Ok(())
         }
