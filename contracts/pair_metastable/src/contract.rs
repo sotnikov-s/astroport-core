@@ -1290,7 +1290,7 @@ fn compute_swap(
         calc_ask_amount(offer_pool.u128(), ask_pool.u128(), offer_amount.u128(), amp).unwrap(),
     );
 
-    // We assume the assets should stay in a 1:1 ratio, so the true exchange rate is 1. So any exchange rate <1 could be considered the spread
+    // We assume the assets should stay in the exchange_rate ratio. So any exchange rate lesser than exchange_rate could be considered the spread
     let spread_amount = offer_amount.saturating_sub(return_amount);
 
     let commission_amount: Uint128 = return_amount * commission_rate;
@@ -1356,7 +1356,7 @@ fn compute_offer_amount(
         .unwrap(),
     );
 
-    // We assume the assets should stay in a 1:1 ratio, so the true exchange rate is 1. Any exchange rate < 1 could be considered the spread
+    // We assume the assets should stay in the exchange_rate ratio. So any exchange rate lesser than exchange_rate could be considered the spread
     let spread_amount = offer_amount.saturating_sub(before_commission_deduction);
 
     let commission_amount = before_commission_deduction * commission_rate;
