@@ -28,10 +28,10 @@ pub fn calc_ask_amount(
     offer_amount: u128,
     amp: u64,
 ) -> Option<u128> {
-    let leverage = amp.checked_mul(u64::from(N_COINS)).unwrap();
+    let leverage = amp.checked_mul(u64::from(N_COINS))?;
     let new_offer_pool = offer_pool + offer_amount;
 
-    let d = compute_d(leverage, offer_pool, ask_pool).unwrap();
+    let d = compute_d(leverage, offer_pool, ask_pool)?;
 
     let new_ask_pool = compute_new_balance(leverage, new_offer_pool, d)?;
 
@@ -55,10 +55,10 @@ pub fn calc_offer_amount(
     ask_amount: u128,
     amp: u64,
 ) -> Option<u128> {
-    let leverage = amp.checked_mul(u64::from(N_COINS)).unwrap();
+    let leverage = amp.checked_mul(u64::from(N_COINS))?;
     let new_ask_pool = ask_pool - ask_amount;
 
-    let d = compute_d(leverage, offer_pool, ask_pool).unwrap();
+    let d = compute_d(leverage, offer_pool, ask_pool)?;
 
     let new_offer_pool = compute_new_balance(leverage, new_ask_pool, d)?;
 
@@ -120,6 +120,7 @@ pub fn upscale(amount: Uint128, factor: Decimal) -> Result<Uint128, OverflowErro
 
 /// ## Description
 /// Safely reverses the factor applied to amount, returning proportionally changed amount or an overflow error.
+/// The factor value should be prechecked not to equal to zero in order the function doesn't panic.
 pub fn downscale(amount: Uint128, factor: Decimal) -> Result<Uint128, OverflowError> {
     factor.inv().unwrap().checked_mul(amount)
 }

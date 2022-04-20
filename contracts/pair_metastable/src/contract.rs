@@ -1296,7 +1296,7 @@ fn compute_swap(
     let commission_amount: Uint128 = return_amount * commission_rate;
 
     // The commission will be absorbed by the pool
-    let return_amount: Uint128 = return_amount.checked_sub(commission_amount).unwrap();
+    let return_amount: Uint128 = return_amount.checked_sub(commission_amount)?;
 
     let return_amount = adjust_precision(return_amount, greater_precision, ask_precision)?;
     let spread_amount = adjust_precision(spread_amount, greater_precision, ask_precision)?;
