@@ -559,11 +559,11 @@ fn test_if_twap_is_calculated_correctly_when_pool_idles() {
         vec![
             Coin {
                 denom: "uusd".to_string(),
-                amount: Uint128::new(4666666_000000),
+                amount: Uint128::new(2000000_000000),
             },
             Coin {
                 denom: "uluna".to_string(),
-                amount: Uint128::new(2000000_000000),
+                amount: Uint128::new(200000_000000),
             },
         ],
     )
@@ -574,8 +574,8 @@ fn test_if_twap_is_calculated_correctly_when_pool_idles() {
 
     // Provide liquidity, accumulators are empty
     let (msg, coins) = provide_liquidity_msg(
-        Uint128::new(1000000_000000),
-        Uint128::new(1000000_000000),
+        Uint128::new(100000_000000),
+        Uint128::new(20000_000000),
         None,
     );
     app.execute_contract(user1.clone(), pair_instance.clone(), &msg, &coins)
@@ -592,8 +592,8 @@ fn test_if_twap_is_calculated_correctly_when_pool_idles() {
 
     // Provide liquidity, accumulators firstly filled with the same prices
     let (msg, coins) = provide_liquidity_msg(
-        Uint128::new(3000000_000000),
-        Uint128::new(1000000_000000),
+        Uint128::new(1500000_000000),
+        Uint128::new(100000_000000),
         None,
     );
     app.execute_contract(user1.clone(), pair_instance.clone(), &msg, &coins)
@@ -618,10 +618,10 @@ fn test_if_twap_is_calculated_correctly_when_pool_idles() {
     let twap0 = cpr_new.price0_cumulative_last - cpr_old.price0_cumulative_last;
     let twap1 = cpr_new.price1_cumulative_last - cpr_old.price1_cumulative_last;
 
-    // Prices weren't changed for the last day, uusd amount in pool = 4000000_000000, uluna = 2000000_000000
+    // Prices weren't changed for the last day, uusd amount in pool = 1600000_000000, uluna = 120000_000000
     let price_precision = Uint128::from(10u128.pow(TWAP_PRECISION.into()));
-    assert_eq!(twap0 / price_precision, Uint128::new(85684)); // 1.008356286 * ELAPSED_SECONDS (86400)
-    assert_eq!(twap1 / price_precision, Uint128::new(87121)); //   0.991712963 * ELAPSED_SECONDS
+    assert_eq!(twap0 / price_precision, Uint128::new(17037)); //  0.197187 * ELAPSED_SECONDS (86400)
+    assert_eq!(twap1 / price_precision, Uint128::new(438161)); // 5.071307 * ELAPSED_SECONDS (86400)
 }
 
 #[test]

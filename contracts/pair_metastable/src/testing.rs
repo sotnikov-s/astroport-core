@@ -1293,13 +1293,13 @@ fn test_accumulate_prices() {
                 block_time_last: 0,
                 last0: 0,
                 last1: 0,
-                x_amount: 250_000000,
-                y_amount: 500_000000,
+                x_amount: 1500_000000,
+                y_amount: 300_000000,
             },
             Result {
                 block_time_last: 1000,
-                cumulative_price_x: 1008,
-                cumulative_price_y: 991,
+                cumulative_price_x: 199,
+                cumulative_price_y: 4999,
                 is_some: true,
             },
         ),
@@ -1324,15 +1324,15 @@ fn test_accumulate_prices() {
             Case {
                 block_time: 1500,
                 block_time_last: 1000,
-                last0: 500 * price_precision,
-                last1: 2000 * price_precision,
-                x_amount: 250_000000,
-                y_amount: 500_000000,
+                last0: 199 * price_precision,
+                last1: 4999 * price_precision,
+                x_amount: 4000_000000,
+                y_amount: 400_000000,
             },
             Result {
                 block_time_last: 1500,
-                cumulative_price_x: 1004,
-                cumulative_price_y: 2495,
+                cumulative_price_x: 298,
+                cumulative_price_y: 7519,
                 is_some: true,
             },
         ),
@@ -1372,6 +1372,7 @@ fn test_accumulate_prices() {
             6,
             Uint128::new(case.y_amount),
             6,
+            Decimal::from_ratio(1u128, 5u128),
         )
         .unwrap();
 

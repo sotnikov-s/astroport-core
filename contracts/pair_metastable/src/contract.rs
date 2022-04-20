@@ -488,6 +488,13 @@ pub fn provide_liquidity(
         auto_stake,
     )?);
 
+    let er = get_and_cache_exchange_rate(
+        deps.storage,
+        &deps.querier,
+        assets[0].info.clone(),
+        assets[1].info.clone(),
+        env.block.height,
+    )?;
     // Accumulate prices assets in the pool
     if let Some((price0_cumulative_new, price1_cumulative_new, block_time)) = accumulate_prices(
         env,
@@ -496,6 +503,7 @@ pub fn provide_liquidity(
         token_precision_0,
         pools[1].amount,
         token_precision_1,
+        er,
     )? {
         config.price0_cumulative_last = price0_cumulative_new;
         config.price1_cumulative_last = price1_cumulative_new;
@@ -606,6 +614,13 @@ pub fn withdraw_liquidity(
     let (pools, total_share) = pool_info(deps.as_ref(), config.clone())?;
     let refund_assets = get_share_in_assets(&pools, amount, total_share);
 
+    let er = get_and_cache_exchange_rate(
+        deps.storage,
+        &deps.querier,
+        pools[0].info.clone(),
+        pools[1].info.clone(),
+        env.block.height,
+    )?;
     // Accumulate prices for the assets in the pool
     if let Some((price0_cumulative_new, price1_cumulative_new, block_time)) = accumulate_prices(
         env,
@@ -614,6 +629,7 @@ pub fn withdraw_liquidity(
         query_token_precision(&deps.querier, pools[0].info.clone())?,
         pools[1].amount,
         query_token_precision(&deps.querier, pools[1].info.clone())?,
+        er,
     )? {
         config.price0_cumulative_last = price0_cumulative_new;
         config.price1_cumulative_last = price1_cumulative_new;
@@ -814,6 +830,7 @@ pub fn swap(
         query_token_precision(&deps.querier, pools[0].info.clone())?,
         pools[1].amount,
         query_token_precision(&deps.querier, pools[1].info.clone())?,
+        er,
     )? {
         config.price0_cumulative_last = price0_cumulative_new;
         config.price1_cumulative_last = price1_cumulative_new;
@@ -863,6 +880,7 @@ pub fn accumulate_prices(
     x_precision: u8,
     y: Uint128,
     y_precision: u8,
+    exchange_rate: Decimal,
 ) -> StdResult<Option<(Uint128, Uint128, u64)>> {
     let block_time = env.block.time.seconds();
     if block_time <= config.block_time_last {
@@ -884,9 +902,13 @@ pub fn accumulate_prices(
         pcl0 = config.price0_cumulative_last.wrapping_add(adjust_precision(
             time_elapsed.checked_mul(Uint128::new(
                 calc_ask_amount(
-                    x.u128(),
+                    upscale(x, exchange_rate)?.u128(),
                     y.u128(),
-                    adjust_precision(Uint128::new(1), 0, greater_precision)?.u128(),
+                    upscale(
+                        adjust_precision(Uint128::new(1), 0, greater_precision)?,
+                        exchange_rate,
+                    )?
+                    .u128(),
                     current_amp,
                 )
                 .unwrap(),
@@ -897,9 +919,13 @@ pub fn accumulate_prices(
         pcl1 = config.price1_cumulative_last.wrapping_add(adjust_precision(
             time_elapsed.checked_mul(Uint128::new(
                 calc_ask_amount(
-                    y.u128(),
+                    downscale(y, exchange_rate)?.u128(),
                     x.u128(),
-                    adjust_precision(Uint128::new(1), 0, greater_precision)?.u128(),
+                    downscale(
+                        adjust_precision(Uint128::new(1), 0, greater_precision)?,
+                        exchange_rate,
+                    )?
+                    .u128(),
                     current_amp,
                 )
                 .unwrap(),
@@ -1160,6 +1186,13 @@ pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePric
     let mut price0_cumulative_last = config.price0_cumulative_last;
     let mut price1_cumulative_last = config.price1_cumulative_last;
 
+    let er = get_exchange_rate(
+        deps.storage,
+        &deps.querier,
+        assets[0].info.clone(),
+        assets[1].info.clone(),
+        env.block.height,
+    )?;
     if let Some((price0_cumulative_new, price1_cumulative_new, _)) = accumulate_prices(
         env,
         &config,
@@ -1167,6 +1200,7 @@ pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePric
         query_token_precision(&deps.querier, assets[0].info.clone())?,
         assets[1].amount,
         query_token_precision(&deps.querier, assets[1].info.clone())?,
+        er,
     )? {
         price0_cumulative_last = price0_cumulative_new;
         price1_cumulative_last = price1_cumulative_new;
