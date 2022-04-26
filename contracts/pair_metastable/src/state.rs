@@ -56,12 +56,7 @@ impl CachedExchangeRate {
             return Err(StdError::generic_err(
                 "Exchange rate must be greater that zero",
             ));
-        }
-        if btl == 0 {
-            return Err(StdError::generic_err(
-                "Exchange rate cache blocks to live must be greater than 0",
-            ));
-        }
+        };
 
         Ok(CachedExchangeRate {
             asset_infos,
@@ -126,15 +121,8 @@ impl CachedExchangeRate {
 
     /// ## Description
     /// Updates the cached exchange rate time to live measured in blocks
-    pub fn update_btl(&mut self, btl: u64) -> StdResult<()> {
-        if btl == 0 {
-            return Err(StdError::generic_err(
-                "Exchange rate cache blocks to live must be greater than 0",
-            ));
-        }
-
+    pub fn update_btl(&mut self, btl: u64) {
         self.btl = btl;
-        Ok(())
     }
 
     /// ## Description
@@ -185,8 +173,13 @@ mod tests {
         assert_eq!(er.is_expired(1), false);
         assert_eq!(er.is_expired(11), true);
 
-        // update btl and check expiration
-        er.update_btl(20).unwrap();
+        // update btl=0 and check expiration
+        er.update_btl(0);
+        assert_eq!(er.is_expired(1), true);
+        assert_eq!(er.is_expired(11), true);
+
+        // update btl=20 and check expiration
+        er.update_btl(20);
         assert_eq!(er.is_expired(1), false);
         assert_eq!(er.is_expired(11), false);
         assert_eq!(er.is_expired(21), true);

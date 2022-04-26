@@ -1687,7 +1687,7 @@ fn update_rate_provider(
 fn update_er_cache_btl(deps: DepsMut, btl: u64) -> Result<(), ContractError> {
     let mut er_cache = ER_CACHE.load(deps.storage)?;
 
-    er_cache.update_btl(btl)?;
+    er_cache.update_btl(btl);
     ER_CACHE.save(deps.storage, &er_cache)?;
 
     Ok(())
