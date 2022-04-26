@@ -295,6 +295,7 @@ pub fn receive_cw20(
                 if let AssetInfo::Token { contract_addr, .. } = &pool {
                     if contract_addr == &info.sender {
                         authorized = true;
+                        break;
                     }
                 }
             }
