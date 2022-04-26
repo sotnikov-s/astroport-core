@@ -36,13 +36,13 @@ pub struct Config {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct CachedExchangeRate {
     /// Asset information for the assets in the pair
-    pub asset_infos: [AssetInfo; 2],
+    asset_infos: [AssetInfo; 2],
     /// The proportion in exchange of asset 0 to asset 1
-    pub exchange_rate: Decimal,
+    exchange_rate: Decimal,
     /// The blockchain height of the exchange rate update
-    pub height: u64,
+    height: u64,
     /// The amount of blocks after that the exchange rate expires
-    pub btl: u64,
+    btl: u64,
 }
 
 impl CachedExchangeRate {
@@ -57,6 +57,11 @@ impl CachedExchangeRate {
                 "Exchange rate must be greater that zero",
             ));
         }
+        if btl == 0 {
+            return Err(StdError::generic_err(
+                "Exchange rate cache blocks to live must be greater than 0",
+            ));
+        }
 
         Ok(CachedExchangeRate {
             asset_infos,
@@ -64,6 +69,12 @@ impl CachedExchangeRate {
             exchange_rate,
             height,
         })
+    }
+
+    /// ## Description
+    /// Returns the assets pair
+    pub fn get_assets(&self) -> [AssetInfo; 2] {
+        [self.asset_infos[0].clone(), self.asset_infos[1].clone()]
     }
 
     /// ## Description
@@ -115,10 +126,25 @@ impl CachedExchangeRate {
 
     /// ## Description
     /// Updates the cached exchange rate time to live measured in blocks
-    pub fn update_btl(&mut self, btl: u64) {
+    pub fn update_btl(&mut self, btl: u64) -> StdResult<()> {
+        if btl == 0 {
+            return Err(StdError::generic_err(
+                "Exchange rate cache blocks to live must be greater than 0",
+            ));
+        }
+
         self.btl = btl;
+        Ok(())
     }
 
+    /// ## Description
+    /// Returns the cached value lifetime measured in blocks
+    pub fn get_btl(&self) -> u64 {
+        self.btl
+    }
+
+    /// ## Description
+    /// Returns whether the cached value has expired
     pub fn is_expired(&self, height: u64) -> bool {
         height.ge(&self.height.add(self.btl))
     }
@@ -160,7 +186,7 @@ mod tests {
         assert_eq!(er.is_expired(11), true);
 
         // update btl and check expiration
-        er.update_btl(20);
+        er.update_btl(20).unwrap();
         assert_eq!(er.is_expired(1), false);
         assert_eq!(er.is_expired(11), false);
         assert_eq!(er.is_expired(21), true);

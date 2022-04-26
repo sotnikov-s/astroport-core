@@ -77,10 +77,6 @@ pub fn instantiate(
         return Err(ContractError::IncorrectAmp {});
     }
 
-    if params.er_cache_btl == 0 {
-        return Err(ContractError::IncorrectErCacheBTL {});
-    }
-
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     let config = Config {
@@ -1229,7 +1225,7 @@ pub fn query_config(deps: Deps, env: Env) -> StdResult<ConfigResponse> {
         params: Some(to_binary(&MetaStablePoolConfig {
             amp: Decimal::from_ratio(compute_current_amp(&config, &env)?, AMP_PRECISION),
             er_provider_addr: config.er_provider_addr.to_string(),
-            er_cache_btl: er_cache.btl,
+            er_cache_btl: er_cache.get_btl(),
         })?),
     })
 }
@@ -1659,19 +1655,17 @@ fn update_rate_provider(
 ) -> Result<(), ContractError> {
     let mut er_cache = ER_CACHE.load(deps.storage)?;
     config.er_provider_addr = addr_validate_to_lower(deps.api, address.as_str())?;
+    let assets = er_cache.get_assets();
 
     match query_exchange_rate(
         &deps.querier,
-        &er_cache.asset_infos[0],
-        &er_cache.asset_infos[1],
+        &assets[0],
+        &assets[1],
         config.er_provider_addr.clone(),
     ) {
         Ok(resp) => {
             er_cache.update_rate(
-                [
-                    &er_cache.asset_infos[0].clone(),
-                    &er_cache.asset_infos[1].clone(),
-                ],
+                [&assets[0], &assets[1]],
                 resp.exchange_rate,
                 env.block.height,
             )?;
@@ -1693,11 +1687,7 @@ fn update_rate_provider(
 fn update_er_cache_btl(deps: DepsMut, btl: u64) -> Result<(), ContractError> {
     let mut er_cache = ER_CACHE.load(deps.storage)?;
 
-    if btl == 0 {
-        return Err(ContractError::IncorrectErCacheBTL {});
-    }
-
-    er_cache.update_btl(btl);
+    er_cache.update_btl(btl)?;
     ER_CACHE.save(deps.storage, &er_cache)?;
 
     Ok(())

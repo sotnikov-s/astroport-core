@@ -36,9 +36,6 @@ pub enum ContractError {
     #[error("Pair type mismatch. Check factory pair configs")]
     PairTypeMismatch {},
 
-    #[error("Exchange rate cache blocks to live must be greater than 0")]
-    IncorrectErCacheBTL {},
-
     #[error(
         "Amp coefficient must be greater than 0 and less than or equal to {}",
         MAX_AMP
