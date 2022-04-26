@@ -65,6 +65,9 @@ pub enum ContractError {
 
     #[error("Exchange rate provider address is invalid")]
     InvalidRateProviderError {},
+
+    #[error("Wrong asset info is given")]
+    WrongAssetInfoError {},
 }
 
 impl From<OverflowError> for ContractError {

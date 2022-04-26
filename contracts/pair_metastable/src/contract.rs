@@ -381,12 +381,12 @@ pub fn provide_liquidity(
             .iter()
             .find(|a| a.info.equal(&pools[0].info))
             .map(|a| a.amount)
-            .expect("Wrong asset info is given"),
+            .ok_or_else(|| ContractError::WrongAssetInfoError {})?,
         assets
             .iter()
             .find(|a| a.info.equal(&pools[1].info))
             .map(|a| a.amount)
-            .expect("Wrong asset info is given"),
+            .ok_or_else(|| ContractError::WrongAssetInfoError {})?,
     ];
 
     if deposits[0].is_zero() || deposits[1].is_zero() {
