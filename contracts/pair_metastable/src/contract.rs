@@ -68,11 +68,10 @@ pub fn instantiate(
         return Err(ContractError::DoublingAssets {});
     }
 
-    if msg.init_params.is_none() {
-        return Err(ContractError::InitParamsNotFound {});
-    }
-
-    let params: MetaStablePoolParams = from_binary(&msg.init_params.unwrap())?;
+    let params: MetaStablePoolParams = match msg.init_params {
+        Some(init_params) => from_binary(&init_params)?,
+        None => return Err(ContractError::InitParamsNotFound {}),
+    };
 
     if params.amp == 0 || params.amp > MAX_AMP {
         return Err(ContractError::IncorrectAmp {});
@@ -558,12 +557,13 @@ fn mint_liquidity_token_message(
     }
 
     // Mint for the contract and stake into the Generator
-    let generator =
-        query_factory_config(&deps.querier, config.clone().factory_addr)?.generator_address;
-
-    if generator.is_none() {
+    let generator = if let Some(g) =
+        query_factory_config(&deps.querier, config.clone().factory_addr)?.generator_address
+    {
+        g
+    } else {
         return Err(ContractError::AutoStakeError {});
-    }
+    };
 
     Ok(vec![
         CosmosMsg::Wasm(WasmMsg::Execute {
@@ -577,7 +577,7 @@ fn mint_liquidity_token_message(
         CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: lp_token.to_string(),
             msg: to_binary(&Cw20ExecuteMsg::Send {
-                contract: generator.unwrap().to_string(),
+                contract: generator.to_string(),
                 amount,
                 msg: to_binary(&GeneratorHookMsg::DepositFor(recipient))?,
             })?,
