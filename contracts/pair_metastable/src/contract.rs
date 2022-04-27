@@ -19,8 +19,8 @@ use astroport::factory::PairType;
 use astroport::generator::Cw20HookMsg as GeneratorHookMsg;
 use astroport::pair::{InstantiateMsg, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE, TWAP_PRECISION};
 use astroport::pair_metastable::{
-    ConfigResponse, CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, MetaStablePoolConfig,
-    MetaStablePoolParams, MetaStablePoolUpdateParams, MigrateMsg, PoolResponse, QueryMsg,
+    ConfigResponse, CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, MetastablePoolConfig,
+    MetastablePoolParams, MetastablePoolUpdateParams, MigrateMsg, PoolResponse, QueryMsg,
     ReverseSimulationResponse, SimulationResponse,
 };
 use astroport::querier::{
@@ -68,7 +68,7 @@ pub fn instantiate(
         return Err(ContractError::DoublingAssets {});
     }
 
-    let params: MetaStablePoolParams = match msg.init_params {
+    let params: MetastablePoolParams = match msg.init_params {
         Some(init_params) => from_binary(&init_params)?,
         None => return Err(ContractError::InitParamsNotFound {}),
     };
@@ -84,7 +84,7 @@ pub fn instantiate(
             contract_addr: env.contract.address.clone(),
             liquidity_token: Addr::unchecked(""),
             asset_infos: msg.asset_infos.clone(),
-            pair_type: PairType::MetaStable {},
+            pair_type: PairType::Metastable {},
         },
         factory_addr: addr_validate_to_lower(deps.api, msg.factory_addr.as_str())?,
         er_provider_addr: addr_validate_to_lower(deps.api, params.er_provider_addr.as_str())?,
@@ -1222,7 +1222,7 @@ pub fn query_config(deps: Deps, env: Env) -> StdResult<ConfigResponse> {
     let er_cache: CachedExchangeRate = ER_CACHE.load(deps.storage)?;
     Ok(ConfigResponse {
         block_time_last: config.block_time_last,
-        params: Some(to_binary(&MetaStablePoolConfig {
+        params: Some(to_binary(&MetastablePoolConfig {
             amp: Decimal::from_ratio(compute_current_amp(&config, &env)?, AMP_PRECISION),
             er_provider_addr: config.er_provider_addr.to_string(),
             er_cache_btl: er_cache.get_btl(),
@@ -1548,16 +1548,16 @@ pub fn update_config(
         return Err(ContractError::Unauthorized {});
     }
 
-    match from_binary::<MetaStablePoolUpdateParams>(&params)? {
-        MetaStablePoolUpdateParams::StartChangingAmp {
+    match from_binary::<MetastablePoolUpdateParams>(&params)? {
+        MetastablePoolUpdateParams::StartChangingAmp {
             next_amp,
             next_amp_time,
         } => start_changing_amp(config, deps, env, next_amp, next_amp_time)?,
-        MetaStablePoolUpdateParams::StopChangingAmp {} => stop_changing_amp(config, deps, env)?,
-        MetaStablePoolUpdateParams::UpdateRateProvider { address } => {
+        MetastablePoolUpdateParams::StopChangingAmp {} => stop_changing_amp(config, deps, env)?,
+        MetastablePoolUpdateParams::UpdateRateProvider { address } => {
             update_rate_provider(config, deps, env, address)?
         }
-        MetaStablePoolUpdateParams::UpdateErCacheBTL { btl } => update_er_cache_btl(deps, btl)?,
+        MetastablePoolUpdateParams::UpdateErCacheBTL { btl } => update_er_cache_btl(deps, btl)?,
     }
 
     Ok(Response::default())

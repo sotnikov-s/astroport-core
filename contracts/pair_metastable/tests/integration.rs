@@ -6,8 +6,8 @@ use astroport::factory::{
 use astroport::pair::InstantiateMsg;
 use astroport::pair::TWAP_PRECISION;
 use astroport::pair_metastable::{
-    ConfigResponse, CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, MetaStablePoolConfig,
-    MetaStablePoolParams, MetaStablePoolUpdateParams, QueryMsg,
+    ConfigResponse, CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, MetastablePoolConfig,
+    MetastablePoolParams, MetastablePoolUpdateParams, QueryMsg,
 };
 
 use astroport::fixed_rate_provider::{
@@ -143,7 +143,7 @@ fn instantiate_pair(mut router: &mut TerraApp, owner: &Addr) -> Addr {
         token_code_id: token_contract_code_id,
         factory_addr: String::from("factory"),
         init_params: Some(
-            to_binary(&MetaStablePoolParams {
+            to_binary(&MetastablePoolParams {
                 amp: 100,
                 er_provider_addr: rate_provider.into_string(),
                 er_cache_btl: 100u64,
@@ -415,7 +415,7 @@ fn test_compatibility_of_tokens_with_different_precision() {
             code_id: pair_code_id,
             maker_fee_bps: 0,
             total_fee_bps: 0,
-            pair_type: PairType::MetaStable {},
+            pair_type: PairType::Metastable {},
             is_disabled: false,
             is_generator_disabled: false,
         }],
@@ -453,10 +453,10 @@ fn test_compatibility_of_tokens_with_different_precision() {
         .unwrap();
 
     let msg = FactoryExecuteMsg::CreatePair {
-        pair_type: PairType::MetaStable {},
+        pair_type: PairType::Metastable {},
         asset_infos: asset_infos.clone(),
         init_params: Some(
-            to_binary(&MetaStablePoolParams {
+            to_binary(&MetastablePoolParams {
                 amp: 100,
                 er_provider_addr: rate_provider.to_string(),
                 er_cache_btl: 100u64,
@@ -688,7 +688,7 @@ fn create_pair_with_same_assets() {
         token_code_id: token_contract_code_id,
         factory_addr: String::from("factory"),
         init_params: Some(
-            to_binary(&MetaStablePoolParams {
+            to_binary(&MetastablePoolParams {
                 amp: 100,
                 er_provider_addr: rate_provider.into_string(),
                 er_cache_btl: 100u64,
@@ -771,7 +771,7 @@ fn update_pair_config() {
         token_code_id: token_contract_code_id,
         factory_addr: factory_instance.to_string(),
         init_params: Some(
-            to_binary(&MetaStablePoolParams {
+            to_binary(&MetastablePoolParams {
                 amp: 100,
                 er_provider_addr: rate_provider.clone().into_string(),
                 er_cache_btl: 100u64,
@@ -796,7 +796,7 @@ fn update_pair_config() {
         .query_wasm_smart(pair.clone(), &QueryMsg::Config {})
         .unwrap();
 
-    let params: MetaStablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
+    let params: MetastablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
 
     assert_eq!(params.amp, Decimal::from_ratio(100u32, 1u32));
     assert_eq!(params.er_cache_btl, 100u64);
@@ -816,7 +816,7 @@ fn update_pair_config() {
 
     // Start changing amp with incorrect next amp
     let msg = ExecuteMsg::UpdateConfig {
-        params: to_binary(&MetaStablePoolUpdateParams::StartChangingAmp {
+        params: to_binary(&MetastablePoolUpdateParams::StartChangingAmp {
             next_amp: MAX_AMP + 1,
             next_amp_time: router.block_info().time.seconds(),
         })
@@ -837,7 +837,7 @@ fn update_pair_config() {
 
     // Start changing amp with big difference between the old and new amp value
     let msg = ExecuteMsg::UpdateConfig {
-        params: to_binary(&MetaStablePoolUpdateParams::StartChangingAmp {
+        params: to_binary(&MetastablePoolUpdateParams::StartChangingAmp {
             next_amp: 100 * MAX_AMP_CHANGE + 1,
             next_amp_time: router.block_info().time.seconds(),
         })
@@ -858,7 +858,7 @@ fn update_pair_config() {
 
     // Start changing amp before the MIN_AMP_CHANGING_TIME has elapsed
     let msg = ExecuteMsg::UpdateConfig {
-        params: to_binary(&MetaStablePoolUpdateParams::StartChangingAmp {
+        params: to_binary(&MetastablePoolUpdateParams::StartChangingAmp {
             next_amp: 250,
             next_amp_time: router.block_info().time.seconds(),
         })
@@ -883,7 +883,7 @@ fn update_pair_config() {
     });
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: to_binary(&MetaStablePoolUpdateParams::StartChangingAmp {
+        params: to_binary(&MetastablePoolUpdateParams::StartChangingAmp {
             next_amp: 250,
             next_amp_time: router.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
         })
@@ -903,7 +903,7 @@ fn update_pair_config() {
         .query_wasm_smart(pair.clone(), &QueryMsg::Config {})
         .unwrap();
 
-    let params: MetaStablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
+    let params: MetastablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
 
     assert_eq!(params.amp, Decimal::from_ratio(175u32, 1u32));
 
@@ -916,7 +916,7 @@ fn update_pair_config() {
         .query_wasm_smart(pair.clone(), &QueryMsg::Config {})
         .unwrap();
 
-    let params: MetaStablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
+    let params: MetastablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
 
     assert_eq!(params.amp, Decimal::from_ratio(250u32, 1u32));
 
@@ -926,7 +926,7 @@ fn update_pair_config() {
     });
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: to_binary(&MetaStablePoolUpdateParams::StartChangingAmp {
+        params: to_binary(&MetastablePoolUpdateParams::StartChangingAmp {
             next_amp: 50,
             next_amp_time: router.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
         })
@@ -946,13 +946,13 @@ fn update_pair_config() {
         .query_wasm_smart(pair.clone(), &QueryMsg::Config {})
         .unwrap();
 
-    let params: MetaStablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
+    let params: MetastablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
 
     assert_eq!(params.amp, Decimal::from_ratio(150u32, 1u32));
 
     // Stop changing amp
     let msg = ExecuteMsg::UpdateConfig {
-        params: to_binary(&MetaStablePoolUpdateParams::StopChangingAmp {}).unwrap(),
+        params: to_binary(&MetastablePoolUpdateParams::StopChangingAmp {}).unwrap(),
     };
 
     router
@@ -968,7 +968,7 @@ fn update_pair_config() {
         .query_wasm_smart(pair.clone(), &QueryMsg::Config {})
         .unwrap();
 
-    let params: MetaStablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
+    let params: MetastablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
 
     assert_eq!(params.amp, Decimal::from_ratio(150u32, 1u32));
 
@@ -992,7 +992,7 @@ fn update_pair_config() {
         .unwrap();
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: to_binary(&MetaStablePoolUpdateParams::UpdateRateProvider {
+        params: to_binary(&MetastablePoolUpdateParams::UpdateRateProvider {
             address: new_rate_provider.clone().into_string(),
         })
         .unwrap(),
@@ -1007,7 +1007,7 @@ fn update_pair_config() {
         .query_wasm_smart(pair.clone(), &QueryMsg::Config {})
         .unwrap();
 
-    let params: MetaStablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
+    let params: MetastablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
 
     assert_eq!(params.er_cache_btl, 100u64);
     assert_eq!(
@@ -1029,7 +1029,7 @@ fn update_pair_config() {
 
     // change exchange rate cache BTL
     let msg = ExecuteMsg::UpdateConfig {
-        params: to_binary(&MetaStablePoolUpdateParams::UpdateErCacheBTL { btl: 555u64 }).unwrap(),
+        params: to_binary(&MetastablePoolUpdateParams::UpdateErCacheBTL { btl: 555u64 }).unwrap(),
     };
 
     router
@@ -1041,7 +1041,7 @@ fn update_pair_config() {
         .query_wasm_smart(pair.clone(), &QueryMsg::Config {})
         .unwrap();
 
-    let params: MetaStablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
+    let params: MetastablePoolConfig = from_binary(&res.params.unwrap()).unwrap();
 
     assert_eq!(params.er_cache_btl, 555u64);
 }

@@ -12,7 +12,7 @@ use astroport::asset::{Asset, AssetInfo, PairInfo};
 
 use astroport::pair::{InstantiateMsg, TWAP_PRECISION};
 use astroport::pair_metastable::{
-    Cw20HookMsg, ExecuteMsg, MetaStablePoolParams, PoolResponse, ReverseSimulationResponse,
+    Cw20HookMsg, ExecuteMsg, MetastablePoolParams, PoolResponse, ReverseSimulationResponse,
     SimulationResponse,
 };
 use astroport::token::InstantiateMsg as TokenInstantiateMsg;
@@ -79,7 +79,7 @@ fn proper_initialization() {
         ],
         token_code_id: 10u64,
         init_params: Some(
-            to_binary(&MetaStablePoolParams {
+            to_binary(&MetastablePoolParams {
                 amp: 100,
                 er_provider_addr: String::from("er_provider"),
                 er_cache_btl: 100u64,
@@ -181,7 +181,7 @@ fn provide_liquidity() {
         token_code_id: 10u64,
         factory_addr: String::from("factory"),
         init_params: Some(
-            to_binary(&MetaStablePoolParams {
+            to_binary(&MetastablePoolParams {
                 amp: 100,
                 er_provider_addr: String::from("er_provider"),
                 er_cache_btl: 100u64,
@@ -564,7 +564,7 @@ fn withdraw_liquidity() {
         token_code_id: 10u64,
         factory_addr: String::from("factory"),
         init_params: Some(
-            to_binary(&MetaStablePoolParams {
+            to_binary(&MetastablePoolParams {
                 amp: 100,
                 er_provider_addr: String::from("er_provider"),
                 er_cache_btl: 100u64,
@@ -710,7 +710,7 @@ fn try_native_to_token() {
         token_code_id: 10u64,
         factory_addr: String::from("factory"),
         init_params: Some(
-            to_binary(&MetaStablePoolParams {
+            to_binary(&MetastablePoolParams {
                 amp: 100,
                 er_provider_addr: String::from("er_provider"),
                 er_cache_btl: 100u64,
@@ -887,7 +887,7 @@ fn try_token_to_native() {
         token_code_id: 10u64,
         factory_addr: String::from("factory"),
         init_params: Some(
-            to_binary(&MetaStablePoolParams {
+            to_binary(&MetastablePoolParams {
                 amp: 100,
                 er_provider_addr: String::from("er_provider"),
                 er_cache_btl: 100u64,
@@ -1159,7 +1159,7 @@ fn test_query_pool() {
         token_code_id: 10u64,
         factory_addr: String::from("factory"),
         init_params: Some(
-            to_binary(&MetaStablePoolParams {
+            to_binary(&MetastablePoolParams {
                 amp: 100,
                 er_provider_addr: String::from("er_provider"),
                 er_cache_btl: 100u64,
@@ -1243,7 +1243,7 @@ fn test_query_share() {
         token_code_id: 10u64,
         factory_addr: String::from("factory"),
         init_params: Some(
-            to_binary(&MetaStablePoolParams {
+            to_binary(&MetastablePoolParams {
                 amp: 100,
                 er_provider_addr: String::from("er_provider"),
                 er_cache_btl: 100u64,
@@ -1356,7 +1356,7 @@ fn test_accumulate_prices() {
                     ],
                     contract_addr: Addr::unchecked("pair"),
                     liquidity_token: Addr::unchecked("lp_token"),
-                    pair_type: PairType::MetaStable {},
+                    pair_type: PairType::Metastable {},
                 },
                 factory_addr: Addr::unchecked("factory"),
                 block_time_last: case.block_time_last,
@@ -1446,7 +1446,7 @@ fn test_simulations() {
         token_code_id: 10u64,
         factory_addr: String::from("factory"),
         init_params: Some(
-            to_binary(&MetaStablePoolParams {
+            to_binary(&MetastablePoolParams {
                 amp: 100,
                 er_provider_addr: String::from("er_provider"),
                 er_cache_btl: 100u64,
