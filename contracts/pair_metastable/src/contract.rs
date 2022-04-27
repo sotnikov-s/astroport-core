@@ -870,6 +870,8 @@ pub fn swap(
 /// * **y** is an object of type [`Uint128`]. This is the balance of asset\[\1] in the pool.
 ///
 /// * **y_precision** is an object of type [`u8`]. This is the precision for the y token.
+///
+/// * **exchange_rate** is an object of type [`Decimal`]. This is the exchange ratio between asset\[\0] and asset\[\1].
 pub fn accumulate_prices(
     env: Env,
     config: &Config,
@@ -1217,6 +1219,8 @@ pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePric
 /// Returns the pair contract configuration in a [`ConfigResponse`] object.
 /// ## Params
 /// * **deps** is an object of type [`Deps`].
+///
+/// * **env** is an object of type [`Env`].
 pub fn query_config(deps: Deps, env: Env) -> StdResult<ConfigResponse> {
     let config: Config = CONFIG.load(deps.storage)?;
     let er_cache: CachedExchangeRate = ER_CACHE.load(deps.storage)?;
@@ -1258,6 +1262,8 @@ pub fn amount_of(coins: &[Coin], denom: String) -> Uint128 {
 /// * **offer_amount** is an object of type [`Uint128`]. This is the amount of offer assets to swap.
 ///
 /// * **commission_rate** is an object of type [`Decimal`]. This is the total amount of fees charged for the swap.
+///
+/// * **exchange_rate** is an object of type [`Decimal`]. This is the exchange ratio between offer asset and ask asset.
 ///
 /// * **amp** is an object of type [`u64`]. This is the pool amplification used to calculate the swap result.
 fn compute_swap(
@@ -1316,6 +1322,10 @@ fn compute_swap(
 /// * **ask_amount** is an object of type [`Uint128`]. This is the amount of ask assets to swap to.
 ///
 /// * **commission_rate** is an object of type [`Decimal`]. This is the total amount of fees charged for the swap.
+///
+/// * **exchange_rate** is an object of type [`Decimal`]. This is the exchange ratio between offer asset and ask asset.
+///
+/// * **amp** is an object of type [`u64`]. This is the pool amplification used to calculate the swap result.
 fn compute_offer_amount(
     offer_pool: Uint128,
     offer_precision: u8,
@@ -1365,6 +1375,19 @@ fn compute_offer_amount(
     Ok((offer_amount, spread_amount, commission_amount))
 }
 
+/// ## Description
+/// Returns exchange rate between assets from exchange rate cache, if the cached rate is not expired. Otherwise,
+/// the exchange rate is retrieved from the rate provider and cached.
+/// ## Params
+/// * **storage** is an object of type [`Storage`].
+///
+/// * **querier** is an object of type [`QuerierWrapper`].
+///
+/// * **offer_asset** is an object of type [`AssetInfo`].
+///
+/// * **ask_asset** is an object of type [`AssetInfo`].
+///
+/// * **height** is an object of type [`u64`].
 fn get_and_cache_exchange_rate(
     storage: &mut dyn Storage,
     querier: &QuerierWrapper,
@@ -1387,6 +1410,19 @@ fn get_and_cache_exchange_rate(
     Ok(er.exchange_rate)
 }
 
+/// ## Description
+/// Returns exchange rate between assets from exchange rate cache, if the cached rate is not expired. Otherwise,
+/// the exchange rate is retrieved from the rate provider.
+/// ## Params
+/// * **storage** is an object of type [`Storage`].
+///
+/// * **querier** is an object of type [`QuerierWrapper`].
+///
+/// * **offer_asset** is an object of type [`AssetInfo`].
+///
+/// * **ask_asset** is an object of type [`AssetInfo`].
+///
+/// * **height** is an object of type [`u64`].
 fn get_exchange_rate(
     storage: &dyn Storage,
     querier: &QuerierWrapper,
@@ -1683,7 +1719,7 @@ fn update_rate_provider(
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
 ///
-/// * **btl** is an object of type [`u64`]. This is the lifetime measured in blocks to be used in the future.
+/// * **btl** is an object of type [`u64`]. This is the lifetime measured in blocks.
 fn update_er_cache_btl(deps: DepsMut, btl: u64) -> Result<(), ContractError> {
     let mut er_cache = ER_CACHE.load(deps.storage)?;
 

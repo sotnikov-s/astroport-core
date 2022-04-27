@@ -3,7 +3,7 @@ use cosmwasm_std::{OverflowError, StdError};
 use thiserror::Error;
 
 /// ## Description
-/// This enum describes stableswap pair contract errors!
+/// This enum describes metastableswap pair contract errors
 #[derive(Error, Debug, PartialEq)]
 pub enum ContractError {
     #[error("{0}")]

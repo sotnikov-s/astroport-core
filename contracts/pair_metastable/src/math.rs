@@ -15,9 +15,9 @@ pub const AMP_PRECISION: u64 = 100;
 /// ## Description
 /// Calculates the ask amount (the amount of tokens swapped to).
 /// ## Params
-/// * **offer_pool** is an object of type [`u128`]. This is the amount of offer tokens currently in a stableswap pool.
+/// * **offer_pool** is an object of type [`u128`]. This is the amount of offer tokens currently in a metastableswap pool.
 ///
-/// * **ask_pool** is an object of type [`u128`]. This is the amount of ask tokens currently in a stableswap pool.
+/// * **ask_pool** is an object of type [`u128`]. This is the amount of ask tokens currently in a metastableswap pool.
 ///
 /// * **offer_amount** is an object of type [`u128`]. This is the amount of offer tokens to swap.
 ///
@@ -42,9 +42,9 @@ pub fn calc_ask_amount(
 /// ## Description
 /// Calculates the amount to be swapped (the offer amount).
 /// ## Params
-/// * **offer_pool** is an object of type [`u128`]. This is the amount of offer tokens currently in a stableswap pool.
+/// * **offer_pool** is an object of type [`u128`]. This is the amount of offer tokens currently in a metastableswap pool.
 ///
-/// * **ask_pool** is an object of type [`u128`]. This is the amount of ask tokens currently in a stableswap pool.
+/// * **ask_pool** is an object of type [`u128`]. This is the amount of ask tokens currently in a metastableswap pool.
 ///
 /// * **ask_amount** is an object of type [`u128`]. This is the amount of offer tokens to swap.
 ///

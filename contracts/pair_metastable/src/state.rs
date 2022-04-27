@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::ops::Add;
 
 /// ## Description
-/// This structure stores the main stableswap pair parameters.
+/// This structure stores the main metastableswap pair parameters.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Config {
     /// The pair information stored in a [`PairInfo`] struct
@@ -37,7 +37,8 @@ pub struct Config {
 pub struct CachedExchangeRate {
     /// Asset information for the assets in the pair
     asset_infos: [AssetInfo; 2],
-    /// The proportion in exchange of asset 0 to asset 1
+    /// The proportion in exchange of asset 0 to asset 1 (i.e. how many assets 1 user will
+    /// receive for providing one asset 0)
     exchange_rate: Decimal,
     /// The blockchain height of the exchange rate update
     height: u64,

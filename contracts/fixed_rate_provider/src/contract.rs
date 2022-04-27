@@ -154,7 +154,7 @@ pub fn query_rate(
         config.exchange_rate.inv().unwrap()
     } else {
         return Err(StdError::generic_err(
-            "Given ask asset doesn't belong to pairs",
+            "Given assets don't belong to the pair",
         ));
     };
 

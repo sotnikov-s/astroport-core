@@ -11,7 +11,8 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     /// ## Description
-    /// Retrieves the current exchange rate between assets.
+    /// Retrieves the current exchange rate between assets (i.e. how many ask_assets user will
+    /// receive for providing one offer_asset)
     GetExchangeRate {
         offer_asset: AssetInfo,
         ask_asset: AssetInfo,

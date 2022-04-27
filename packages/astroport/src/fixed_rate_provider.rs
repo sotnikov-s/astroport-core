@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 pub struct InstantiateMsg {
     /// Information about the two assets in the pool
     pub asset_infos: [AssetInfo; 2],
-    /// The rate of exchange of asset_0 to asset_1
+    /// The rate of exchange of asset_0 to asset_1 (i.e. how many assets_1 user will
+    /// receive for providing one asset_0)
     pub exchange_rate: Decimal,
 }
 
@@ -28,7 +29,7 @@ pub enum ExecuteMsg {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     /// ## Description
-    /// Retrieves the current exchange rate between assets in a [`rate_provider::GetExchangeRateResponse`] structure.
+    /// Retrieves the current exchange rate between assets in a [`crate::rate_provider::GetExchangeRateResponse`] structure.
     GetExchangeRate {
         offer_asset: AssetInfo,
         ask_asset: AssetInfo,
@@ -43,6 +44,7 @@ pub enum QueryMsg {
 pub struct ConfigResponse {
     /// Information about the two assets in the pool
     pub asset_infos: [AssetInfo; 2],
-    /// The rate of exchange of asset_0 to asset_1
+    /// The rate of exchange of asset_0 to asset_1 (i.e. how many assets_1 user will
+    /// receive for providing one asset_0)
     pub exchange_rate: Decimal,
 }
