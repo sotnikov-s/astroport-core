@@ -4,10 +4,11 @@ use astroport::factory::{
     QueryMsg as FactoryQueryMsg,
 };
 use astroport::pair::InstantiateMsg;
-use astroport::pair::TWAP_PRECISION;
+use astroport::pair::{
+    ConfigResponse, CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, QueryMsg, TWAP_PRECISION,
+};
 use astroport::pair_metastable::{
-    ConfigResponse, CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, MetastablePoolConfig,
-    MetastablePoolParams, MetastablePoolUpdateParams, QueryMsg,
+    MetastablePoolConfig, MetastablePoolParams, MetastablePoolUpdateParams,
 };
 
 use astroport::fixed_rate_provider::{

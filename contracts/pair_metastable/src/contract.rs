@@ -17,11 +17,13 @@ use astroport::asset::{addr_validate_to_lower, format_lp_token_name, Asset, Asse
 use astroport::factory::PairType;
 
 use astroport::generator::Cw20HookMsg as GeneratorHookMsg;
-use astroport::pair::{InstantiateMsg, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE, TWAP_PRECISION};
+use astroport::pair::{
+    ConfigResponse, CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg, MigrateMsg,
+    PoolResponse, QueryMsg, ReverseSimulationResponse, SimulationResponse, DEFAULT_SLIPPAGE,
+    MAX_ALLOWED_SLIPPAGE, TWAP_PRECISION,
+};
 use astroport::pair_metastable::{
-    ConfigResponse, CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, MetastablePoolConfig,
-    MetastablePoolParams, MetastablePoolUpdateParams, MigrateMsg, PoolResponse, QueryMsg,
-    ReverseSimulationResponse, SimulationResponse,
+    MetastablePoolConfig, MetastablePoolParams, MetastablePoolUpdateParams,
 };
 use astroport::querier::{
     query_factory_config, query_fee_info, query_supply, query_token_precision,

@@ -10,11 +10,11 @@ use crate::response::MsgInstantiateContractResponse;
 use crate::state::Config;
 use astroport::asset::{Asset, AssetInfo, PairInfo};
 
-use astroport::pair::{InstantiateMsg, TWAP_PRECISION};
-use astroport::pair_metastable::{
-    Cw20HookMsg, ExecuteMsg, MetastablePoolParams, PoolResponse, ReverseSimulationResponse,
-    SimulationResponse,
+use astroport::pair::{
+    Cw20HookMsg, ExecuteMsg, InstantiateMsg, PoolResponse, ReverseSimulationResponse,
+    SimulationResponse, TWAP_PRECISION,
 };
+use astroport::pair_metastable::MetastablePoolParams;
 use astroport::token::InstantiateMsg as TokenInstantiateMsg;
 use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
 use cosmwasm_std::{

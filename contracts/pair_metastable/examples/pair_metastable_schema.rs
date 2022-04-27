@@ -5,10 +5,9 @@ use cosmwasm_schema::{export_schema_with_title, remove_schemas, schema_for};
 
 use astroport::asset::PairInfo;
 use astroport::pair::{
-    CumulativePricesResponse, Cw20HookMsg, InstantiateMsg, PoolResponse, ReverseSimulationResponse,
-    SimulationResponse,
+    CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, PoolResponse,
+    QueryMsg, ReverseSimulationResponse, SimulationResponse,
 };
-use astroport::pair_metastable::{ExecuteMsg, MigrateMsg, QueryMsg};
 
 fn main() {
     let mut out_dir = current_dir().unwrap();
