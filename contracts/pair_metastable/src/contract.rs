@@ -98,15 +98,15 @@ pub fn instantiate(
     };
     CONFIG.save(deps.storage, &config)?;
 
-    let er = query_exchange_rate(
+    let er = fetch_exchange_rate(
         &deps.querier,
+        config.er_provider_addr,
         &msg.asset_infos[0],
         &msg.asset_infos[1],
-        config.er_provider_addr,
     )?;
     let er_cache = CachedExchangeRate::new(
         msg.asset_infos.clone(),
-        er.exchange_rate,
+        er,
         env.block.height,
         params.er_cache_btl,
     )?;
@@ -487,8 +487,8 @@ pub fn provide_liquidity(
     let er = get_and_cache_exchange_rate(
         deps.storage,
         &deps.querier,
-        assets[0].info.clone(),
-        assets[1].info.clone(),
+        &assets[0].info,
+        &assets[1].info,
         env.block.height,
     )?;
     // Accumulate prices assets in the pool
@@ -614,8 +614,8 @@ pub fn withdraw_liquidity(
     let er = get_and_cache_exchange_rate(
         deps.storage,
         &deps.querier,
-        pools[0].info.clone(),
-        pools[1].info.clone(),
+        &pools[0].info,
+        &pools[1].info,
         env.block.height,
     )?;
     // Accumulate prices for the assets in the pool
@@ -769,8 +769,8 @@ pub fn swap(
     let er = get_and_cache_exchange_rate(
         deps.storage,
         &deps.querier,
-        offer_asset.info.clone(),
-        ask_pool.info.clone(),
+        &offer_asset.info,
+        &ask_pool.info,
         env.block.height,
     )?;
     let (return_amount, spread_amount, commission_amount) = compute_swap(
@@ -1085,8 +1085,8 @@ pub fn query_simulation(deps: Deps, env: Env, offer_asset: Asset) -> StdResult<S
     let er = get_exchange_rate(
         deps.storage,
         &deps.querier,
-        offer_asset.info,
-        ask_pool.clone().info,
+        &offer_asset.info,
+        &ask_pool.clone().info,
         env.block.height,
     )?;
     let (return_amount, spread_amount, commission_amount) = compute_swap(
@@ -1150,8 +1150,8 @@ pub fn query_reverse_simulation(
     let er = get_exchange_rate(
         deps.storage,
         &deps.querier,
-        offer_pool.clone().info,
-        ask_asset.info,
+        &offer_pool.clone().info,
+        &ask_asset.info,
         env.block.height,
     )?;
     let (offer_amount, spread_amount, commission_amount) = compute_offer_amount(
@@ -1188,8 +1188,8 @@ pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePric
     let er = get_exchange_rate(
         deps.storage,
         &deps.querier,
-        assets[0].info.clone(),
-        assets[1].info.clone(),
+        &assets[0].info,
+        &assets[1].info,
         env.block.height,
     )?;
     if let Some((price0_cumulative_new, price1_cumulative_new, _)) = accumulate_prices(
@@ -1391,23 +1391,23 @@ fn compute_offer_amount(
 fn get_and_cache_exchange_rate(
     storage: &mut dyn Storage,
     querier: &QuerierWrapper,
-    offer_asset: AssetInfo,
-    ask_asset: AssetInfo,
+    offer_asset: &AssetInfo,
+    ask_asset: &AssetInfo,
     height: u64,
 ) -> StdResult<Decimal> {
     if let Ok(er) = ER_CACHE.load(storage) {
         if !er.is_expired(height) {
-            return er.get_rate([&offer_asset, &ask_asset]);
+            return er.get_rate([offer_asset, ask_asset]);
         }
     }
 
     let er_provider_address = CONFIG.load(storage)?.er_provider_addr;
-    let er = query_exchange_rate(querier, &offer_asset, &ask_asset, er_provider_address)?;
+    let er = fetch_exchange_rate(querier, er_provider_address, offer_asset, ask_asset)?;
     ER_CACHE.update(storage, |mut prev_state| -> StdResult<_> {
-        prev_state.update_rate([&offer_asset, &ask_asset], er.exchange_rate, height)?;
+        prev_state.update_rate([offer_asset, ask_asset], er, height)?;
         Ok(prev_state)
     })?;
-    Ok(er.exchange_rate)
+    Ok(er)
 }
 
 /// ## Description
@@ -1426,18 +1426,54 @@ fn get_and_cache_exchange_rate(
 fn get_exchange_rate(
     storage: &dyn Storage,
     querier: &QuerierWrapper,
-    offer_asset: AssetInfo,
-    ask_asset: AssetInfo,
+    offer_asset: &AssetInfo,
+    ask_asset: &AssetInfo,
     height: u64,
 ) -> StdResult<Decimal> {
     if let Ok(er) = ER_CACHE.load(storage) {
         if !er.is_expired(height) {
-            return er.get_rate([&offer_asset, &ask_asset]);
+            return er.get_rate([offer_asset, ask_asset]);
         }
     }
 
     let er_provider_address = CONFIG.load(storage)?.er_provider_addr;
-    let er = query_exchange_rate(querier, &offer_asset, &ask_asset, er_provider_address)?;
+    let er = fetch_exchange_rate(querier, er_provider_address, offer_asset, ask_asset)?;
+    Ok(er)
+}
+
+/// ## Description
+/// Requests the rate provider for exchange rate between assets and validates the received value.
+/// ## Params
+/// * **querier** is an object of type [`QuerierWrapper`].
+///
+/// * **er_provider_address** is an object of type [`Addr`]. This is the rate provider address.
+///
+/// * **offer_asset** is an object of type [`AssetInfo`].
+///
+/// * **ask_asset** is an object of type [`AssetInfo`].
+fn fetch_exchange_rate(
+    querier: &QuerierWrapper,
+    er_provider_address: Addr,
+    offer_asset: &AssetInfo,
+    ask_asset: &AssetInfo,
+) -> StdResult<Decimal> {
+    let er = query_exchange_rate(querier, offer_asset, ask_asset, er_provider_address)?;
+
+    if er.exchange_rate <= Decimal::zero() {
+        return Err(StdError::generic_err(
+            "Exchange rate from rate provider must be greater that zero",
+        ));
+    }
+    if !er.ask_asset.equal(ask_asset) {
+        return Err(StdError::generic_err(
+            "Ask asset in exchange rate received from rate provider does not match the requested ask asset",
+        ));
+    }
+    if !er.offer_asset.equal(offer_asset) {
+        return Err(StdError::generic_err(
+            "Offer asset in exchange rate received from rate provider does not match the requested offer asset",
+        ));
+    }
     Ok(er.exchange_rate)
 }
 
@@ -1693,18 +1729,14 @@ fn update_rate_provider(
     config.er_provider_addr = addr_validate_to_lower(deps.api, address.as_str())?;
     let assets = er_cache.get_assets();
 
-    match query_exchange_rate(
+    match fetch_exchange_rate(
         &deps.querier,
+        config.er_provider_addr.clone(),
         &assets[0],
         &assets[1],
-        config.er_provider_addr.clone(),
     ) {
         Ok(resp) => {
-            er_cache.update_rate(
-                [&assets[0], &assets[1]],
-                resp.exchange_rate,
-                env.block.height,
-            )?;
+            er_cache.update_rate([&assets[0], &assets[1]], resp, env.block.height)?;
             ER_CACHE.save(deps.storage, &er_cache)?;
             CONFIG.save(deps.storage, &config)?;
 

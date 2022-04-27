@@ -1,7 +1,5 @@
 use crate::asset::AssetInfo;
-use cosmwasm_std::{
-    to_binary, Addr, Decimal, QuerierWrapper, QueryRequest, StdError, StdResult, WasmQuery,
-};
+use cosmwasm_std::{to_binary, Addr, Decimal, QuerierWrapper, QueryRequest, StdResult, WasmQuery};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -42,18 +40,11 @@ pub fn query_exchange_rate(
     ask_asset: &AssetInfo,
     rate_provider_contract: Addr,
 ) -> StdResult<GetExchangeRateResponse> {
-    let er: GetExchangeRateResponse = querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
+    querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
         contract_addr: rate_provider_contract.to_string(),
         msg: to_binary(&QueryMsg::GetExchangeRate {
             offer_asset: offer_asset.clone(),
             ask_asset: ask_asset.clone(),
         })?,
-    }))?;
-
-    if er.exchange_rate <= Decimal::zero() {
-        return Err(StdError::generic_err(
-            "Exchange rate from rate provider must be greater that zero",
-        ));
-    }
-    Ok(er)
+    }))
 }
