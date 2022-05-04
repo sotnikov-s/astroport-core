@@ -190,19 +190,11 @@ fn compute_new_balance(leverage: u64, new_source_amount: u128, d_val: u128) -> O
 /// ## Description
 /// Returns self to the power of b.
 fn checked_u8_power(a: &U256, b: u8) -> Option<U256> {
-    let mut result = *a;
-    for _ in 1..b {
-        result = result.checked_mul(*a)?;
-    }
-    Some(result)
+    a.checked_pow(U256::from(b))
 }
 
 /// ## Description
 /// Returns self multiplied by b.
 fn checked_u8_mul(a: &U256, b: u8) -> Option<U256> {
-    let mut result = *a;
-    for _ in 1..b {
-        result = result.checked_add(*a)?;
-    }
-    Some(result)
+    a.checked_mul(U256::from(b))
 }
