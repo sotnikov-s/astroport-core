@@ -8,6 +8,9 @@ pub enum ContractError {
     #[error("{0}")]
     Std(#[from] StdError),
 
+    #[error("Unauthorized")]
+    Unauthorized {},
+
     #[error("Doubling assets in asset infos")]
     DoublingAssets {},
 

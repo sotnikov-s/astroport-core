@@ -15,15 +15,15 @@ use cosmwasm_std::{
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
 ///
-/// * **env** is an object of type [`Env`].
+/// * **_env** is an object of type [`Env`].
 ///
-/// * **_info** is an object of type [`MessageInfo`].
+/// * **info** is an object of type [`MessageInfo`].
 /// * **msg** is a message of type [`InstantiateMsg`] which contains the parameters for creating the contract.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
     deps: DepsMut,
     _env: Env,
-    _info: MessageInfo,
+    info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     msg.asset_infos[0].check(deps.api)?;
@@ -38,6 +38,7 @@ pub fn instantiate(
     }
 
     let config = Config {
+        creator: info.sender,
         asset_infos: msg.asset_infos,
         exchange_rate: msg.exchange_rate,
     };
@@ -83,15 +84,20 @@ pub fn execute(
 ///
 /// * **_env** is an object of type [`Env`].
 ///
-/// * **_info** is an object of type [`MessageInfo`].
+/// * **info** is an object of type [`MessageInfo`].
 ///
 /// * **exchange_rate** is an object of type [`Decimal`] that represents the exchange rate between assets.
 pub fn update_exchange_rate(
     deps: DepsMut,
     _env: Env,
-    _info: MessageInfo,
+    info: MessageInfo,
     exchange_rate: Decimal,
 ) -> Result<Response, ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+    if info.sender != config.creator {
+        return Err(ContractError::Unauthorized {});
+    }
+
     if exchange_rate <= Decimal::zero() {
         return Err(ContractError::InvalidExchangeRate {});
     }
