@@ -1,6 +1,6 @@
-# Astroport Base Stableswap Pair
+# Astroport Metastableswap Pair
 
-The stableswap pool uses the 4A(Rx+Ry) + D formula, resulting in a constant price ∆x / ∆y = 1. More details around how the pool functions can be found [here](https://docs.astroport.fi/astroport/astroport/astro-pools/stableswap-invariant-pools).
+The metastableswap pool is very similar to the stableswap pool, but instead of providing a 1:1 exchange rate (ER), it allows to swap assets on a custom ER given by an exchange rate provider contract. The metastableswap pool uses the 4A(Rx+Ry) + D formula modified by ER, resulting in a constant price ∆x / ∆y = ER. Metastableswap pools rely on [rate providers](https://github.com/astroport-fi/astroport-core/blob/main/packages/astroport/README.md#rate-provider) in ER determination.
 
 ---
 
@@ -10,9 +10,9 @@ A user can provide liquidity to a constant product pool by calling `provide_liqu
 
 Whenever liquidity is deposited into a pool, special tokens known as "liquidity tokens" are minted to the provider’s address, in proportion to how much liquidity they contributed to the pool. These tokens are a representation of a liquidity provider’s contribution to a pool. Whenever a trade occurs, the `lp_commission` is distributed pro-rata to all LPs in the pool at the moment of the trade. To receive the underlying liquidity back plus accrued LP fees, LPs must burn their liquidity tokens.
 
-When providing liquidity from a smart contract, the most important thing to keep in mind is that the amount of tokens deposited into a pool and the amount of tokens withdrawn later from the pool will most likely not be the same (even if stableswap encourages a constant 1:1 ratio between all assets in the pool).
+When providing liquidity from a smart contract, the most important thing to keep in mind is that the amount of tokens deposited into a pool and the amount of tokens withdrawn later from the pool will most likely not be the same (even if metastableswap encourages a constant ratio between all assets in the pool).
 
-As an example, let's say the global ratio between two tokens x:y is 1.01:1 (1 x = 0.99 y), but the current ratio between the tokens in an Astroport pair is 1:1.01 (1 x = 1.01 y). Let's also say that someone may decide to LP in the x:y Astroport pool at the current 1:1.01 ratio. As the Astroport pool gets arbitraged to the global ratio, the amount of x & y tokens that the LP can withdraw changes because the total amounts of x & y tokens in the pool also change.
+As an example, let's say the global ratio between two tokens x:y is 2:1 (1 x = 0.5 y), but the current ratio between the tokens in an Astroport pair is 1.95:1 (1 x = 0.51 y). Let's also say that someone may decide to LP in the x:y Astroport pool at the current 1.95:1 ratio. As the Astroport pool gets arbitraged to the global ratio, the amount of x & y tokens that the LP can withdraw changes because the total amounts of x & y tokens in the pool also change.
 
 > Note that before executing the `provide_liqudity` operation, a user must allow the pool contract to take tokens from their wallet
 
@@ -20,7 +20,7 @@ As an example, let's say the global ratio between two tokens x:y is 1.01:1 (1 x 
 
 If a user specifies a slippage tolerance when they provide liquidity in a constant product pool, the pool contract makes sure that the transaction goes through only if the pool price does not change more than tolerance.
 
-As an example, let's say someone LPs in a pool and specifies a 1% slippage tolerance. The user LPs 200 UST and 200 `ASSET`. With a 1% slippage tolerance, `amountUSTMin` (the minimum amount of UST to LP) should be set to 198 UST, and `amountASSETMin` (the minimum amount of `ASSET` to LP) should be set to .99 `ASSET`. This means that, in a worst case scenario, liquidity will be added at a pool rate of 198 `ASSET`/1 UST or 202.02 UST/1 `ASSET` (200 UST + .99 `ASSET`). If the contract cannot add liquidity within these bounds (because the pool ratio changed more than the tolerance), the transaction will revert.
+As an example, let's say someone LPs in a pool and specifies a 1% slippage tolerance. The user LPs 200 UST and 20 `ASSET`. With a 1% slippage tolerance, `amountUSTMin` (the minimum amount of UST to LP) should be set to 198 UST, and `amountASSETMin` (the minimum amount of `ASSET` to LP) should be set to 19.8 `ASSET`. This means that, in a worst case scenario, liquidity will be added at a pool rate of 19.8 `ASSET`/200 UST or 202 UST/20 `ASSET`. If the contract cannot add liquidity within these bounds (because the pool ratio changed more than the tolerance), the transaction will revert.
 
 ## Traders
 
@@ -40,7 +40,7 @@ Please note that Astroport has the default value for the spread set to 0.5% and 
 
 ## InstantiateMsg
 
-Initializes a new stableswap pair.
+Initializes a new metastableswap pair.
 
 ```json
 {
@@ -58,11 +58,9 @@ Initializes a new stableswap pair.
       }
     }
   ],
-  "init_params": "<base64_encoded_json_string: optional binary serialised parameters for custom pool types>"
+  "init_params": "<base64_encoded_json_string>: binary serialised parameters for metastableswap pool type>"
 }
 ```
-
-## ExecuteMsg
 
 ## ExecuteMsg
 
@@ -186,7 +184,7 @@ Update the pair's configuration.
 ```json
   {
     "update_config": {
-      "params": "<base64_encoded_json_string>: binary serialised parameters for stable pool types; example: {'amp': 100} "
+      "params": "<base64_encoded_json_string>: binary serialised parameters for metastableswap pool type>"
     }
   }
 ```
