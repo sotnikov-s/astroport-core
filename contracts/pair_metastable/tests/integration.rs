@@ -14,7 +14,7 @@ use astroport::pair_metastable::{
 use astroport::fixed_rate_provider::{
     InstantiateMsg as RateProviderInstantiateMsg, QueryMsg as RateProviderQueryMsg,
 };
-use astroport::rate_provider::GetExchangeRateResponse;
+use astroport::rate_provider::ExchangeRateResponse;
 use astroport::token::InstantiateMsg as TokenInstantiateMsg;
 use astroport_pair_metastable::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
 use cosmwasm_std::testing::{mock_env, MockApi, MockStorage};
@@ -803,12 +803,12 @@ fn update_pair_config() {
     assert_eq!(params.er_cache_btl, 100u64);
     assert_eq!(params.er_provider_addr, rate_provider.clone().into_string());
 
-    let msg = RateProviderQueryMsg::GetExchangeRate {
+    let msg = RateProviderQueryMsg::ExchangeRate {
         offer_asset: asset_infos[0].clone(),
         ask_asset: asset_infos[1].clone(),
     };
 
-    let res: GetExchangeRateResponse = router
+    let res: ExchangeRateResponse = router
         .wrap()
         .query_wasm_smart(rate_provider.clone(), &msg)
         .unwrap();
@@ -1016,12 +1016,12 @@ fn update_pair_config() {
         new_rate_provider.clone().into_string()
     );
 
-    let msg = RateProviderQueryMsg::GetExchangeRate {
+    let msg = RateProviderQueryMsg::ExchangeRate {
         offer_asset: asset_infos[0].clone(),
         ask_asset: asset_infos[1].clone(),
     };
 
-    let res: GetExchangeRateResponse = router
+    let res: ExchangeRateResponse = router
         .wrap()
         .query_wasm_smart(new_rate_provider, &msg)
         .unwrap();

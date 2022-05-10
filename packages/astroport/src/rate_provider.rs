@@ -11,7 +11,7 @@ pub enum QueryMsg {
     /// ## Description
     /// Retrieves the current exchange rate between assets (i.e. how many ask_assets user will
     /// receive for providing one offer_asset)
-    GetExchangeRate {
+    ExchangeRate {
         offer_asset: AssetInfo,
         ask_asset: AssetInfo,
     },
@@ -20,7 +20,7 @@ pub enum QueryMsg {
 /// ## Description
 /// This structure holds the parameters that are returned from a successful get exchange rate query.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct GetExchangeRateResponse {
+pub struct ExchangeRateResponse {
     pub offer_asset: AssetInfo,
     pub ask_asset: AssetInfo,
     pub exchange_rate: Decimal,
@@ -39,10 +39,10 @@ pub fn query_exchange_rate(
     offer_asset: &AssetInfo,
     ask_asset: &AssetInfo,
     rate_provider_contract: Addr,
-) -> StdResult<GetExchangeRateResponse> {
+) -> StdResult<ExchangeRateResponse> {
     querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
         contract_addr: rate_provider_contract.to_string(),
-        msg: to_binary(&QueryMsg::GetExchangeRate {
+        msg: to_binary(&QueryMsg::ExchangeRate {
             offer_asset: offer_asset.clone(),
             ask_asset: ask_asset.clone(),
         })?,

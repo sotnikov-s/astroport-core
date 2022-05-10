@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use astroport::asset::AssetInfo;
 use astroport::factory::FeeInfoResponse;
 use astroport::factory::QueryMsg::FeeInfo;
-use astroport::rate_provider::{GetExchangeRateResponse, QueryMsg::GetExchangeRate};
+use astroport::rate_provider::{ExchangeRateResponse, QueryMsg::ExchangeRate};
 use cw20::{BalanceResponse, Cw20QueryMsg, TokenInfoResponse};
 use terra_cosmwasm::{TaxCapResponse, TaxRateResponse, TerraQuery, TerraQueryWrapper, TerraRoute};
 
@@ -195,7 +195,7 @@ impl WasmMockQuerier {
                     }
                 } else if contract_addr == "er_provider" {
                     match from_binary(&msg).unwrap() {
-                        GetExchangeRate {
+                        ExchangeRate {
                             offer_asset,
                             ask_asset,
                         } => {
@@ -205,7 +205,7 @@ impl WasmMockQuerier {
                                 .get([offer_asset.clone(), ask_asset.clone()])
                             {
                                 Ok(v) => SystemResult::Ok(
-                                    to_binary(&GetExchangeRateResponse {
+                                    to_binary(&ExchangeRateResponse {
                                         offer_asset,
                                         ask_asset,
                                         exchange_rate: v,

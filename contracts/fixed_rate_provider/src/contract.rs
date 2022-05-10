@@ -2,7 +2,7 @@ use crate::error::ContractError;
 use crate::state::{Config, CONFIG};
 use astroport::asset::AssetInfo;
 use astroport::fixed_rate_provider::{ConfigResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
-use astroport::rate_provider::GetExchangeRateResponse;
+use astroport::rate_provider::ExchangeRateResponse;
 use cosmwasm_std::{
     entry_point, to_binary, Binary, Decimal, Deps, DepsMut, Env, Fraction, MessageInfo, Response,
     StdError, StdResult,
@@ -120,16 +120,16 @@ pub fn update_exchange_rate(
 /// * **msg** is an object of type [`QueryMsg`].
 ///
 /// ## Queries
-/// * **QueryMsg::GetExchangeRate {
+/// * **QueryMsg::ExchangeRate {
 ///     offer_asset,
 ///     ask_asset,
-/// }** Returns information about the pair exchange rate using a custom [`GetExchangeRateResponse`] structure.
+/// }** Returns information about the pair exchange rate using a custom [`ExchangeRateResponse`] structure.
 ///
 /// * **QueryMsg::Config {}** Returns general contract parameters using a custom [`ConfigResponse`] structure.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::GetExchangeRate {
+        QueryMsg::ExchangeRate {
             offer_asset,
             ask_asset,
         } => to_binary(&query_rate(deps, offer_asset, ask_asset)?),
@@ -138,7 +138,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 }
 
 /// ## Description
-/// Returns information about the pair exchange rate using a custom [`GetExchangeRateResponse`] structure.
+/// Returns information about the pair exchange rate using a custom [`ExchangeRateResponse`] structure.
 /// ## Params
 /// * **deps** is an object of type [`Deps`].
 ///
@@ -149,7 +149,7 @@ pub fn query_rate(
     deps: Deps,
     offer_asset: AssetInfo,
     ask_asset: AssetInfo,
-) -> StdResult<GetExchangeRateResponse> {
+) -> StdResult<ExchangeRateResponse> {
     let config: Config = CONFIG.load(deps.storage)?;
 
     let exchange_rate = if config.asset_infos[0].equal(&offer_asset)
@@ -164,7 +164,7 @@ pub fn query_rate(
         ));
     };
 
-    let resp = GetExchangeRateResponse {
+    let resp = ExchangeRateResponse {
         offer_asset,
         ask_asset,
         exchange_rate,

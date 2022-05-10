@@ -29,8 +29,8 @@ pub enum ExecuteMsg {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     /// ## Description
-    /// Retrieves the current exchange rate between assets in a [`crate::rate_provider::GetExchangeRateResponse`] structure.
-    GetExchangeRate {
+    /// Retrieves the current exchange rate between assets in a [`crate::rate_provider::ExchangeRateResponse`] structure.
+    ExchangeRate {
         offer_asset: AssetInfo,
         ask_asset: AssetInfo,
     },
