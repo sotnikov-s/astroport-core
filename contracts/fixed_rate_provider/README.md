@@ -2,7 +2,7 @@
 
 Fixed rate provider is used in pools of the metastableswap type for supplying a constant exchange rate between assets in the pool. Although the exchange rate in the provider is constant, the rate provider contract creator is allowed to manually update it, making it constant in a timespan.
 
-Fixed rate provider is just an option to be used as a rate provider, and most likely just an example and test one. Metaswableswap pools may (and most probably will) use custom variations of rate providers with more complicated and refined logic of exchange rate determination.
+Fixed rate provider is just an option to be used as a rate provider, and most likely just an example and test one. Metastableswap pools may (and most probably will) use custom variations of rate providers with more complicated and refined logic of exchange rate determination.
 
 ---
 
