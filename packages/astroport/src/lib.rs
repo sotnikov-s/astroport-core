@@ -1,13 +1,16 @@
 pub mod asset;
 pub mod common;
 pub mod factory;
+pub mod fixed_rate_provider;
 pub mod generator;
 pub mod generator_proxy;
 pub mod maker;
 pub mod oracle;
 pub mod pair;
+pub mod pair_metastable;
 pub mod pair_stable_bluna;
 pub mod querier;
+pub mod rate_provider;
 pub mod router;
 pub mod staking;
 pub mod token;

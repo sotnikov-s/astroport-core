@@ -2,7 +2,9 @@
 members = [
     "packages/*",
     "contracts/factory",
+    "contracts/fixed_rate_provider",
     "contracts/pair",
+    "contracts/pair_metastable",
     "contracts/pair_stable",
     "contracts/pair_stable_bluna",
     "contracts/router",

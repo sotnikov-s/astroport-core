@@ -20,6 +20,8 @@ pub enum PairType {
     Xyk {},
     /// Stable pair type
     Stable {},
+    /// Metastable pair type
+    Metastable {},
     /// Custom pair type
     Custom(String),
 }
@@ -30,6 +32,7 @@ impl Display for PairType {
         match self {
             PairType::Xyk {} => fmt.write_str("xyk"),
             PairType::Stable {} => fmt.write_str("stable"),
+            PairType::Metastable {} => fmt.write_str("metastable"),
             PairType::Custom(pair_type) => fmt.write_str(format!("custom-{}", pair_type).as_str()),
         }
     }

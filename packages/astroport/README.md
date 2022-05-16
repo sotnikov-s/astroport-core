@@ -125,3 +125,34 @@ pub fn reverse_simulate(
     offer_asset: &Asset,
 ) -> StdResult<ReverseSimulationResponse>
 ```
+
+### Rate Provider
+
+An abstraction that provides exchange rate between assets for metastableswap pools. In order to be used as a rate provider, a contract should define a ExchangeRate query message with the corresponding parameters and with the ExchangeRateResponse struct as the response.
+
+```rust
+/// ## Description
+/// This structure describes the query messages available in the contract.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum QueryMsg {
+    /// ## Description
+    /// Retrieves the current exchange rate between assets (i.e. how many ask_assets user will
+    /// receive for providing one offer_asset)
+    ExchangeRate {
+        offer_asset: AssetInfo,
+        ask_asset: AssetInfo,
+    },
+}
+
+/// ## Description
+/// This structure holds the parameters that are returned from a successful get exchange rate query.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct ExchangeRateResponse {
+    pub offer_asset: AssetInfo,
+    pub ask_asset: AssetInfo,
+    pub exchange_rate: Decimal,
+}
+```
+
+The simpliest rate provider could be examined at /contracts/fixed_rate_provider.
