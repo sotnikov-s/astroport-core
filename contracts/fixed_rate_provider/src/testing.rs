@@ -6,7 +6,7 @@ use astroport::fixed_rate_provider::{
 };
 use astroport::rate_provider::ExchangeRateResponse;
 use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-use cosmwasm_std::{from_binary, Addr, Decimal, Fraction};
+use cosmwasm_std::{from_binary, Addr, Decimal, Fraction, StdError};
 
 #[test]
 fn proper_initialization() {
@@ -23,7 +23,6 @@ fn proper_initialization() {
     };
     let info = mock_info("creator", &[]);
 
-    // we can just call .unwrap() to assert this was a success
     let res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
     assert_eq!(0, res.messages.len());
 
@@ -65,7 +64,6 @@ fn query_exchange_rate() {
     };
     let info = mock_info("creator", &[]);
 
-    // we can just call .unwrap() to assert this was a success
     let res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
     assert_eq!(0, res.messages.len());
 
@@ -98,6 +96,23 @@ fn query_exchange_rate() {
     )
     .unwrap();
     assert_eq!(er.exchange_rate, exchange_rate.inv().unwrap());
+
+    // check that there is an error response on wrong assets query
+    let res = query(
+        deps.as_ref(),
+        mock_env(),
+        QueryMsg::ExchangeRate {
+            offer_asset: asset_1.clone(),
+            ask_asset: AssetInfo::Token {
+                contract_addr: Addr::unchecked("asset0001"),
+            },
+        },
+    )
+    .unwrap_err();
+    assert_eq!(
+        res,
+        StdError::generic_err("Given assets don't belong to the pair",)
+    );
 }
 
 #[test]
@@ -115,7 +130,6 @@ fn update_exchange_rate() {
     };
     let info = mock_info("creator", &[]);
 
-    // we can just call .unwrap() to assert this was a success
     let res = instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
     assert_eq!(0, res.messages.len());
 
@@ -160,7 +174,7 @@ fn update_exchange_rate() {
         exchange_rate: Decimal::from_ratio(3u128, 5u128),
     };
     let res = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
-    assert_eq!(res, Unauthorized{});
+    assert_eq!(res, Unauthorized {});
 
     let er: ExchangeRateResponse = from_binary(
         &query(
